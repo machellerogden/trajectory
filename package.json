@@ -1,0 +1,27 @@
+{
+  "name": "trajectory",
+  "version": "0.0.0",
+  "description": "Do things",
+  "main": "index.js",
+  "scripts": {
+    "test": "ava test/*.spec.js",
+    "watch": "npm run test -- --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/machellerogden/trajectory.git"
+  },
+  "author": {
+    "name": "Mac Heller-Ogden",
+    "email": "mac@machellerogden.com"
+  },
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "ava": "^1.4.1",
+    "pre-commit": "^1.2.2"
+  },
+  "pre-commit": [
+    "test"
+  ]
+}

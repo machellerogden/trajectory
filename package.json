@@ -4,6 +4,7 @@
   "description": "Do things",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
     "test": "ava test/*.spec.js",
     "watch": "npm run test -- --watch"
   },
@@ -19,7 +20,9 @@
   "dependencies": {},
   "devDependencies": {
     "ava": "^1.4.1",
-    "pre-commit": "^1.2.2"
+    "pre-commit": "^1.2.2",
+    "tslint": "^5.16.0",
+    "typescript": "^3.4.5"
   },
   "pre-commit": [
     "test"

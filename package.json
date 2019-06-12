@@ -2,7 +2,7 @@
   "name": "trajectory",
   "version": "0.0.1",
   "description": "Do things",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "test": "ava test/*.spec.js",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "ava": "^1.4.1",
     "pre-commit": "^1.2.2",
+    "ts-node": "^8.2.0",
     "tslint": "^5.16.0",
     "typescript": "^3.4.5"
   },

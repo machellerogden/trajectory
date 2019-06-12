@@ -1,4 +1,4 @@
-export interface Definition {
+export interface QueueDefinition {
     kind: 'queue';
     spec: Queue;
 }

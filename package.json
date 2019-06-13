@@ -16,7 +16,9 @@
     "email": "mac@machellerogden.com"
   },
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "@hapi/joi": "^15.0.3"
+  },
   "devDependencies": {
     "ava": "^1.4.1",
     "pre-commit": "^1.2.2"

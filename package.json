@@ -17,11 +17,13 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@hapi/joi": "^15.0.3"
+    "@hapi/joi": "^15.0.3",
+    "mediary": "^0.4.1"
   },
   "devDependencies": {
     "ava": "^1.4.1",
-    "pre-commit": "^1.2.2"
+    "pre-commit": "^1.2.2",
+    "sinon": "^7.3.2"
   },
   "pre-commit": [
     "test"

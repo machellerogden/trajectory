@@ -20,9 +20,9 @@ class Trajectory extends EventEmitter {
             console.log(result);
         });
         this.on('error', async data => {
-            const { name, error } = await data;
+            const { name, result } = await data;
             this.reporter.fail(name);
-            console.error(error);
+            console.error(result);
             process.exit(1);
         });
     }
@@ -87,9 +87,13 @@ class Trajectory extends EventEmitter {
                         case 'succeed':
                             yield* emit('data', io);
                             return;
-                        case 'fail':
-                            yield* emit('error', io);
+                        case 'fail': {
+                            const err = { name, io };
+                            if (state.error) err.error = state.error;
+                            if (state.cause) err.cause = state.cause;
+                            yield* emit('error', err);
                             return;
+                        }
                         case 'parallel':
                             io = await Promise.all(state.branches.map(branch => $this.executeBranch(branch, clone(io))));
                             yield* emit('data', io);

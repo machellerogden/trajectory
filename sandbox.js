@@ -1,5 +1,5 @@
 const { Trajectory } = require('.');
-const t = new Trajectory();
+const t = new Trajectory({ debug: true });
 const a = () => ({ a: 'a' });
 const b = () => ({ b: 'b' });
 const c = () => ({ c: 'c' });
@@ -53,6 +53,11 @@ t.execute({
                             f: {
                                 type: 'task',
                                 fn: f,
+                                next: 'z'
+                            },
+                            z: {
+                                type: 'wait',
+                                seconds: 3,
                                 next: 'g'
                             },
                             g: {

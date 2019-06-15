@@ -24,21 +24,20 @@ class Trajectory extends EventEmitter {
 
     constructor({
         debug = false,
-        reporter = DefaultReporter()
+        reporter = DefaultReporter
     }) {
         super();
         this.reporter = reporter;
         msgTypes.forEach(msgType =>
             this.on(msgType, async ({ name, data }) => {
-                this.reporter[msgType](name);
-                if (debug) this.reporter.info(`${inspect(await data, { colors: true })}`);
+                this.reporter()[msgType](name);
+                if (debug) this.reporter().info(`${inspect(await data, { colors: true })}`);
             }));
     }
 
     async execute(definition, input) {
         const { spec:queue } = await schema.validate(definition);
         const results = [];
-        this.reporter.start('');
         for await (const result of this.schedule(queue, input)) {
             results.push(result);
         }
@@ -48,6 +47,7 @@ class Trajectory extends EventEmitter {
     async * schedule(queue, io) {
         const { startAt, states } = queue;
         const $this = this;
+        this.reporter().start();
 
         async function* loop(state, start) {
             let name; 

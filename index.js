@@ -14,15 +14,15 @@ class Trajectory extends EventEmitter {
     constructor(reporter = ora()) {
         super();
         this.reporter = reporter;
-        this.on('data', async data => {
-            const { name, result } = data;
+        this.on('data', async msg => {
+            const { name, data } = msg;
             this.reporter.succeed(name);
-            console.log(result);
+            console.log(data);
         });
-        this.on('error', async data => {
-            const { name, result } = await data;
+        this.on('error', async msg => {
+            const { name, data } = await msg;
             this.reporter.fail(name);
-            console.error(result);
+            console.error(data);
             process.exit(1);
         });
     }
@@ -54,9 +54,9 @@ class Trajectory extends EventEmitter {
                 state = states[state.next];
             }
 
-            function * emit(type, result) {
-                $this.emit(type, { name, result });
-                yield { name, result };
+            function * emit(type, data) {
+                $this.emit(type, { name, data });
+                yield { name, data };
             }
 
             while (true) {
@@ -119,8 +119,8 @@ class Trajectory extends EventEmitter {
 
     async executeBranch(queue, input) {
         const results = [];
-        for await (const data of this.schedule(queue, input)) {
-            results.push(data.result);
+        for await (const result of this.schedule(queue, input)) {
+            results.push(result.data);
         }
         return results;
     }

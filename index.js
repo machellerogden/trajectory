@@ -1,30 +1,39 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const pauseable = require('pauseable');
 const ora = require('ora');
 const chalk = require('chalk');
 const get = require('lodash/get');
 
-const { MAX_EVENT_COUNT } = require('./lib/constants');
 const { schema } = require('./lib/schema');
 const { sleep } = require('./lib/util');
 const { clone } = require('mediary');
 
 class Trajectory extends EventEmitter {
 
-    constructor() {
+    constructor(reporter = ora()) {
         super();
-        this.spinner = ora();
-        init(this);
+        this.reporter = reporter;
+        this.on('data', async data => {
+            const { name, result } = data;
+            this.reporter.succeed(name);
+            console.log(result);
+        });
+        this.on('error', async data => {
+            const { name, error } = await data;
+            this.reporter.fail(name);
+            console.log(error);
+        });
     }
 
     async execute(definition, input) {
-        this.spinner.start();
+        this.reporter.start();
         const { spec:queue } = await schema.validate(definition);
+        const results = [];
         for await (const result of this.schedule(queue, input)) {
-            this.emit('data', result);
+            results.push(result);
         }
+        return results;
     }
 
     async * schedule(queue, io) {
@@ -33,22 +42,28 @@ class Trajectory extends EventEmitter {
 
         async function* loop(state, start) {
             let name; 
+
             if (start) {
                 name = start;
                 state = state[start];
             }
-            const next = () => {
+
+            function next() {
                 name = state.next;
                 state = states[state.next];
-            };
-            let count = 0;
-            while (count < MAX_EVENT_COUNT) {
-                count++;
+            }
+
+            function * emit(result) {
+                $this.emit('data', { name, result });
+                yield { name, result };
+            }
+
+            while (true) {
                 try {
                     switch (state.type) {
                         case 'task':
                             io = await state.fn(await io)
-                            yield { name, result: io };
+                            yield* emit(io);
                             if (state.end) return;
                             next();
                             break;
@@ -56,7 +71,7 @@ class Trajectory extends EventEmitter {
                             if (state.result != null) {
                                 io = await state.result;
                             }
-                            yield { name, result: io };
+                            yield* emit(io);
                             next();
                             break;
                         case 'wait':
@@ -65,35 +80,42 @@ class Trajectory extends EventEmitter {
                             } else if (state.secondsPath) {
                                 await sleep(get(io, state.secondsPath));
                             }
-                            yield { name, result: io };
+                            yield* emit(io);
                             next();
                             break;
                         case 'succeed':
-                            yield { name, result: io };
+                            yield* emit(io);
                             return;
                         case 'fail':
-                            yield { name, result: io };
-                            // TODO: surface error event
+                            yield* emit(io);
+                            // TODO: emit error
                             console.error('fail');
                             process.exit(1);
                         case 'parallel':
                             io = await Promise.all(state.branches.map(branch => $this.executeBranch(branch, clone(io))));
-                            yield { name, result: io };
+                            yield* emit(io);
                             if (state.end) return;
                             next();
                             break;
                         case 'choice':
                             // TODO
+                            break;
                         default:
+                            // TODO: emit error
+                            console.error('fail');
+                            process.exit(1);
                             break;
 
                     }
                 } catch (e) {
-                    console.error('bad', e);
+                    // TODO: emit error
+                    console.error('fail', e);
+                    process.exit(1);
+                    break;
                 }
             }
         }
-        yield* await loop(states, startAt);
+        yield * await loop(states, startAt);
     }
 
     async executeBranch(queue, input) {
@@ -106,31 +128,3 @@ class Trajectory extends EventEmitter {
 }
 
 module.exports = { Trajectory };
-
-function iter(emitter) {
-    pauseable.resume(emitter);
-    return new Promise((resolve, reject) => {
-        emitter.once('data', data => {
-            pauseable.pause(emitter);
-            resolve(data);
-        });
-        emitter.once('error', error => {
-            pauseable.pause(emitter);
-            reject(error);
-        });
-    });
-}
-
-function* gen (emitter) {
-    while (true) {
-        yield iter(emitter);
-    }
-}
-
-async function init(emitter) {
-    for (const data of gen(emitter)) {
-        const { name, result } = await data;
-        emitter.spinner.succeed(name);
-        console.log(result);
-    }
-}

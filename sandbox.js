@@ -1,5 +1,5 @@
 const { Trajectory } = require('.');
-const t = new Trajectory({ debug: true });
+const t = new Trajectory();
 const a = () => ({ a: 'a' });
 const b = () => ({ b: 'b' });
 const c = () => ({ c: 'c' });

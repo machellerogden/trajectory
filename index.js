@@ -70,7 +70,7 @@ class Trajectory extends EventEmitter {
         const $this = this;
 
         async function* loop(state, start) {
-            io = clone(io);
+            io = clone(await io);
             let name; 
 
             if (state == null || state[start] == null) throw new Error(`Unable to resolve state "${start}".`);
@@ -92,28 +92,36 @@ class Trajectory extends EventEmitter {
 
             const handlers = {
                 task: async function * taskHandler() {
-                        io = await state.fn(await io)
+                        let out = await state.fn(io)
+                        io = out;
                         yield* output('succeed', io);
                 },
                 pass: async function * passHandler() {
+                        let out = io;
                         if (state.result != null) {
-                            io = await state.result;
+                            out = await state.result;
+                        } else if (state.resultPath != null) {
+                            out = get(out, state.resultPath);
                         }
+                        io = out;
                         yield* output('succeed', io);
                 },
                 wait: async function * waitHandler() {
-                        if (state.seconds) {
+                        let out = io;
+                        if (state.seconds != null) {
                             await sleep(state.seconds);
-                        } else if (state.secondsPath) {
+                        } else if (state.secondsPath != null) {
                             await sleep(get(io, state.secondsPath));
                         }
-                        yield* output('succeed', io);
+                        yield* output('succeed', out);
                 },
                 succeed: async function * succeedHandler() {
-                        yield* output('succeed', io);
+                        let out = io;
+                        yield* output('succeed', out);
                 },
                 fail: async function * failHandler() {
-                        const err = { name, io };
+                        let out = io;
+                        const err = { name, out };
                         const errMsg = [];
                         if (state.error) {
                             err.error = state.error;
@@ -128,9 +136,10 @@ class Trajectory extends EventEmitter {
                 },
                 parallel: async function * parallelHandler() {
                         $this.indent += $this.indentCols;
-                        io = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, io)));
                         $this.indent -= $this.indentCols;
-                        yield* output('succeed', io);
+                        let out = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, io)));
+                        io = out;
+                        yield* output('succeed', out);
                 },
                 choice: async function * choiceHandler() {
                     // TODO

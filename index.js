@@ -3,38 +3,65 @@
 const { EventEmitter } = require('events');
 const get = require('lodash/get');
 const { clone } = require('mediary');
+const serializeError = require('serialize-error');
 
-const { schema } = require('./lib/schema');
+const { definitionSchema, optionsSchema } = require('./lib/schema');
 const { sleep } = require('./lib/util');
-const { isTerminal } = require('./lib/helpers');
-const { defaultReporter, defaultReporterOptions } = require('./lib/defaults');
+const { isEnd } = require('./lib/helpers');
+
+const builtInReporter = require('./lib/reporter');
 
 class Trajectory extends EventEmitter {
 
-    constructor({
-        debug = false,
-        reporter = defaultReporter,
-        reporterOptions = defaultReporterOptions
-    } = {}) {
+    constructor(opts = {}) {
+        const {
+            error:optionsError,
+            value:options
+        } = optionsSchema.validate(opts);
+
+        if (optionsError) throw new Error(optionsError);
+
+        const {
+            debug = false,
+            report = true,
+            reporter = builtInReporter,
+            reporterOptions: {
+                indent = 0,
+                indentCols = 2,
+            } = {}
+        } = options;
+
         super();
+
+        this.report = report;
         this.reporter = reporter;
-        this.indent = reporterOptions.indent || defaultReporterOptions.indent;
-        this.indentCols = reporterOptions.indentCols || defaultReporterOptions.indentCols;
-        this.on('event', ({ messageType, name, data }) => {
-            this.reporter[messageType]({ name, data, indent: this.indent });
-        });
+        this.indent = indent;
+        this.indentCols = indentCols;
+
+        this.on('event', this.eventHandler);
+    }
+
+    eventHandler({ type, name, data }) {
+        this.report && this.reporter[type]({ name, data, indent: this.indent });
     }
 
     async execute(definition, input) {
-        const { spec:queue } = await schema.validate(definition);
-        const results = [];
+        const { spec:queue } = await definitionSchema.validate(definition);
+        let results;
         try {
-            for await (const result of this.schedule(queue, input)) {
-                results.push(result);
-            }
+            results = await this.executeQueue(queue, input);
+            this.emit('event', { type: 'complete', name: 'completed', data: results })
         } catch (e) {
-            console.log('boom');
+            const { stack } = serializeError(e);
+            console.error(stack);
+            process.exit(2);
         }
+        return [ input, ...results ];
+    }
+
+    async executeQueue(queue, input) {
+        const results = [];
+        for await (const result of this.schedule(queue, input)) results.push(result.data);
         return results;
     }
 
@@ -43,6 +70,7 @@ class Trajectory extends EventEmitter {
         const $this = this;
 
         async function* loop(state, start) {
+            io = clone(io);
             let name; 
 
             if (state == null || state[start] == null) throw new Error(`Unable to resolve state "${start}".`);
@@ -57,26 +85,21 @@ class Trajectory extends EventEmitter {
                 state = states[state.next];
             }
 
-            function emit(messageType, data) {
-                $this.emit('event', { messageType, name, data });
-            }
-
-            function * output(data) {
+            function * output(type, data) {
                 yield { name, data };
+                $this.emit('event', { type, name, data });
             }
 
             const handlers = {
                 task: async function * taskHandler() {
                         io = await state.fn(await io)
-                        yield* output(io);
-                        emit('succeed', io);
+                        yield* output('succeed', io);
                 },
                 pass: async function * passHandler() {
                         if (state.result != null) {
                             io = await state.result;
                         }
-                        yield* output(io);
-                        emit('succeed', io);
+                        yield* output('succeed', io);
                 },
                 wait: async function * waitHandler() {
                         if (state.seconds) {
@@ -84,26 +107,30 @@ class Trajectory extends EventEmitter {
                         } else if (state.secondsPath) {
                             await sleep(get(io, state.secondsPath));
                         }
-                        yield* output(io);
-                        emit('succeed', io);
+                        yield* output('succeed', io);
                 },
                 succeed: async function * succeedHandler() {
-                        yield* output(io);
-                        emit('succeed', io);
+                        yield* output('succeed', io);
                 },
                 fail: async function * failHandler() {
                         const err = { name, io };
-                        if (state.error) err.error = state.error;
-                        if (state.cause) err.cause = state.cause;
-                        yield* output(err);
-                        emit('fail', err);
+                        const errMsg = [];
+                        if (state.error) {
+                            err.error = state.error;
+                            errMsg.push(err.error);
+                        }
+                        if (state.cause) {
+                            err.cause = state.cause;
+                            errMsg.push(err.cause);
+                        }
+                        yield* output('fail', err);
+                        throw new Error(errMsg.join(': '));
                 },
                 parallel: async function * parallelHandler() {
                         $this.indent += $this.indentCols;
-                        io = await Promise.all(state.branches.map(branch => $this.executeBranch(branch, clone(io))));
+                        io = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, io)));
                         $this.indent -= $this.indentCols;
-                        yield* output(io);
-                        emit('succeed', io);
+                        yield* output('succeed', io);
                 },
                 choice: async function * choiceHandler() {
                     // TODO
@@ -111,21 +138,14 @@ class Trajectory extends EventEmitter {
             };
 
             while (true) {
-                emit('start');
+                $this.emit('event', { type: 'start', name });
                 yield* handlers[state.type]();
-                if (isTerminal(state)) return;
+                if (isEnd(state)) return;
                 next();
             }
         }
-        yield * await loop(states, startAt);
-    }
 
-    async executeBranch(queue, input) {
-        const results = [];
-        for await (const result of this.schedule(queue, input)) {
-            results.push(result.data);
-        }
-        return results;
+        yield * await loop(states, startAt);
     }
 }
 

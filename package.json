@@ -21,7 +21,8 @@
     "chalk": "^2.4.2",
     "lodash": "^4.17.11",
     "log-symbols": "^3.0.0",
-    "mediary": "^0.4.1"
+    "mediary": "^0.4.1",
+    "serialize-error": "^4.1.0"
   },
   "devDependencies": {
     "ava": "^1.4.1",

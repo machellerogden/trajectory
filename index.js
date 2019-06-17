@@ -1,7 +1,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
-const get = require('lodash/get');
+const JSONPath = require('jsonpath');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 
@@ -98,10 +98,14 @@ class Trajectory extends EventEmitter {
                 },
                 pass: async function * passHandler() {
                         let out = io;
+                        if (state.inputPath != null) {
+                            out = JSONPath.query(out, state.outputPath);
+                        }
                         if (state.result != null) {
                             out = await state.result;
-                        } else if (state.resultPath != null) {
-                            out = get(out, state.resultPath);
+                        }
+                        if (state.outputPath != null) {
+                            out = JSONPath.query(out, state.outputPath);
                         }
                         io = out;
                         yield* output('succeed', io);
@@ -111,7 +115,8 @@ class Trajectory extends EventEmitter {
                         if (state.seconds != null) {
                             await sleep(state.seconds);
                         } else if (state.secondsPath != null) {
-                            await sleep(get(io, state.secondsPath));
+                            const seconds = JSONPath.query(out, state.secondsPath);
+                            await sleep(seconds);
                         }
                         yield* output('succeed', out);
                 },

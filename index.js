@@ -27,8 +27,7 @@ class Trajectory extends EventEmitter {
             report = true,
             reporter = builtInReporter,
             reporterOptions: {
-                indent = 0,
-                indentCols = 2,
+                indent = 0
             } = {}
         } = options;
 
@@ -36,14 +35,14 @@ class Trajectory extends EventEmitter {
 
         this.report = report;
         this.reporter = reporter;
+        this.depth = 0;
         this.indent = indent;
-        this.indentCols = indentCols;
 
         this.on('event', this.eventHandler);
     }
 
     eventHandler({ type, name, data }) {
-        this.report && this.reporter[type]({ name, data, indent: this.indent });
+        this.report && this.reporter[type]({ name, data, depth: this.depth, cols: this.indent });
     }
 
     async execute(definition, rawInput = {}) {
@@ -157,9 +156,9 @@ class Trajectory extends EventEmitter {
                     throw new Error(errMsg.join(': '));
                 },
                 async * parallel() {
-                    $this.indent += $this.indentCols;
-                    $this.indent -= $this.indentCols;
+                    $this.depth++;
                     let out = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, io)));
+                    $this.depth--;
                     io = out;
                     yield* output('succeed', out);
                 },

@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const JSONPath = require('jsonpath');
 const set = require('lodash/set');
+const compose = require('lodash/fp/compose');
 //const clone = require('lodash/cloneDeep');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
@@ -108,6 +109,17 @@ class Trajectory extends EventEmitter {
             return set(clone(io), state.resultPath, await value);
         }
 
+        async function delay(data) {
+            if (state.seconds != null) {
+                await sleep(state.seconds);
+            } else if (state.secondsPath != null) {
+                const seconds = JSONPath.query(data, state.secondsPath);
+                if (typeof seconds !== 'number') throw new Error(`secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`);
+                await sleep(seconds);
+            }
+            return data;
+        }
+
         async function * output(type, o) {
             const data = await o;
             yield { name, data };
@@ -117,27 +129,24 @@ class Trajectory extends EventEmitter {
 
         const handlers = {
             async * task() {
-                yield* await output('succeed', getOutput(setResult(state.fn(applyParameters(getInput(io))))));
+                const processIO = compose(getOutput, setResult, state.fn, applyParameters, getInput);
+                yield* await output('succeed', processIO(io));
             },
             async * pass() {
-                yield* await output('succeed', getOutput(setResult(applyParameters(getInput(io)))));
+                const processIO = compose(getOutput, setResult, applyParameters, getInput);
+                yield* await output('succeed', processIO(io));
             },
             async * wait() {
-                let out = getInput(io);
-                if (state.seconds != null) {
-                    await sleep(state.seconds);
-                } else if (state.secondsPath != null) {
-                    const seconds = JSONPath.query(out, state.secondsPath);
-                    await sleep(seconds);
-                }
-                yield* output('succeed', out);
+                const processIO = compose(getOutput, delay, getInput);
+                yield* output('succeed', await processIO(io));
             },
             async * succeed() {
-                let out = io;
-                yield* output('succeed', out);
+                const processIO = compose(getOutput, getInput);
+                yield* output('succeed', processIO(io));
             },
             async * fail() {
-                let out = io;
+                const processIO = compose(getOutput, getInput);
+                const out = processIO(io);
                 const err = { name, out };
                 const errMsg = [];
                 if (state.error) {
@@ -153,10 +162,11 @@ class Trajectory extends EventEmitter {
             },
             async * parallel() {
                 $this.depth++;
-                let out = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, io)));
+                const input = getInput(io);
+                const out = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
+                const processOutput = compose(getOutput, setResult);
                 $this.depth--;
-                io = out;
-                yield* output('succeed', out);
+                yield* output('succeed', processOutput(out));
             },
             async * choice() {
                 // TODO

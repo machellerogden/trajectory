@@ -4,7 +4,6 @@ const { EventEmitter } = require('events');
 const JSONPath = require('jsonpath');
 const set = require('lodash/set');
 const compose = require('lodash/fp/compose');
-//const clone = require('lodash/cloneDeep');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 

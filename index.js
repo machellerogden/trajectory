@@ -28,9 +28,7 @@ class Trajectory extends EventEmitter {
             debug = false,
             report = true,
             reporter = builtInReporter,
-            reporterOptions: {
-                indent = 0
-            } = {}
+            reporterOptions = {}
         } = options;
 
         super();
@@ -38,13 +36,13 @@ class Trajectory extends EventEmitter {
         this.report = report;
         this.reporter = reporter;
         this.depth = 0;
-        this.indent = indent;
+        this.reporterOptions = reporterOptions;
 
         this.on('event', this.eventHandler);
     }
 
     eventHandler({ type, name, data }) {
-        this.report && this.reporter[type]({ name, data, depth: this.depth, cols: this.indent });
+        this.report && this.reporter[type]({ name, data, depth: this.depth, options: this.reporterOptions });
     }
 
     async execute(definition, rawInput = {}) {

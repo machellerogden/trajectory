@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const JSONPath = require('jsonpath');
 const set = require('lodash/set');
+//const clone = require('lodash/cloneDeep');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 
@@ -85,8 +86,8 @@ class Trajectory extends EventEmitter {
             function recur(value) {
                 if (value == null || typeof value !== 'object') return value;
                 return Array.isArray(value)
-                    ? value.reduce((acc, v, i) => applyP(acc, i, v, data, recur), [])
-                    : Object.entries(value).reduce((acc, [ k, v ]) => applyP(acc, k, v, data, recur), {});
+                    ? value.reduce((acc, v, i) => applyP(data, acc, i, v, recur), [])
+                    : Object.entries(value).reduce((acc, [ k, v ]) => applyP(data, acc, k, v, recur), {});
             }
             return recur(state.parameters);
         }
@@ -175,9 +176,9 @@ module.exports = { Trajectory };
 
 function applyP(d, a, k, v, fn) {
     if (k.endsWith('.$')) {
-        acc[k.slice(0, -2)] = JSONPath.query(d, v).shift();
+        a[k.slice(0, -2)] = JSONPath.query(d, v).shift();
     } else {
-        acc[k] = fn(v);
+        a[k] = fn(v[k]);
     }
-    return acc;
+    return a;
 }

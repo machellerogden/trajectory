@@ -127,15 +127,15 @@ class Trajectory extends EventEmitter {
         const handlers = {
             async * task() {
                 const processIO = compose(getOutput, setResult, state.fn, applyParameters, getInput);
-                yield* await output('succeed', processIO(io));
+                yield* output('succeed', processIO(io));
             },
             async * pass() {
                 const processIO = compose(getOutput, setResult, applyParameters, getInput);
-                yield* await output('succeed', processIO(io));
+                yield* output('succeed', processIO(io));
             },
             async * wait() {
                 const processIO = compose(getOutput, delay, getInput);
-                yield* output('succeed', await processIO(io));
+                yield* output('succeed', processIO(io));
             },
             async * succeed() {
                 const processIO = compose(getOutput, getInput);

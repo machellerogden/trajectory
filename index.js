@@ -38,10 +38,10 @@ class Trajectory extends EventEmitter {
         this.depth = 0;
         this.reporterOptions = reporterOptions;
 
-        this.on('event', this.eventHandler);
+        if (report) this.on('event', this.reportHandler);
     }
 
-    eventHandler({ type, name, data }) {
+    reportHandler({ type, name, data }) {
         this.report && this.reporter[type]({ name, data, depth: this.depth, options: this.reporterOptions });
     }
 

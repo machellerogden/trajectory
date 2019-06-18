@@ -230,6 +230,69 @@ test('should thread io through states - resultPath + inputPath', async t => {
     ]);
 });
 
+test('should thread io through states - resultPath + inputPath + outputPath', async t => {
+    t.plan(4);
+    const a = t.context.sandbox.fake.returns({ a: 'a' });
+    const b = t.context.sandbox.fake.returns({ b: 'b' });
+    const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const definition = {
+        kind: 'queue',
+        version: '1.0.0',
+        spec: {
+            startAt: 'a',
+            states: {
+                a: {
+                    type: 'task',
+                    fn: a,
+                    resultPath: 'apath',
+                    next: 'b'
+                },
+                c: {
+                    type: 'task',
+                    fn: c,
+                    inputPath: '$.bpath',
+                    resultPath: 'cpath',
+                    outputPath: '$.cpath.c',
+                    end: true
+                },
+                b: {
+                    type: 'task',
+                    fn: b,
+                    inputPath: '$.apath',
+                    resultPath: 'bpath',
+                    next: 'c'
+                }
+            }
+        }
+    };
+    const trajectory = new Trajectory(testOptions);
+    const results = await trajectory.execute(definition);
+    t.assert(a.calledWith({}));
+    t.assert(b.calledWith({
+        a: 'a'
+    }));
+    t.assert(c.calledWith({
+        b: 'b'
+    }));
+    t.deepEqual(results, [
+        {},
+        {
+            'apath': {
+                a: 'a'
+            }
+        },
+        {
+            'apath': {
+                a: 'a'
+            },
+            'bpath': {
+                b: 'b'
+            }
+        },
+        'c' // TODO: decide whether primitives are allowed as io results
+    ]);
+});
+
 test('should handle parallel executions', async t => {
     t.plan(3);
     const b = t.context.sandbox.fake.returns({ b: 'b' });

@@ -43,7 +43,7 @@ test('should execute basic sequential tasks', async t => {
     t.assert(a.calledOnce);
     t.assert(b.calledOnce);
     t.assert(c.calledOnce);
-    t.deepEqual(results, [ void 0, { a: 'a' }, { b: 'b' }, { c: 'c' } ]);
+    t.deepEqual(results, [ {}, { a: 'a' }, { b: 'b' }, { c: 'c' } ]);
 });
 
 test('should thread io through states', async t => {
@@ -76,11 +76,11 @@ test('should thread io through states', async t => {
         }
     };
     const trajectory = new Trajectory(testOptions);
-    const results = await trajectory.execute(definition, 'initial');
-    t.assert(a.calledWith('initial'));
+    const results = await trajectory.execute(definition);
+    t.assert(a.calledWith({}));
     t.assert(b.calledWith({ a: 'a' }));
     t.assert(c.calledWith({ b: 'b' }));
-    t.deepEqual(results, [ 'initial', { a: 'a' }, { b: 'b' }, { c: 'c' } ]);
+    t.deepEqual(results, [ {}, { a: 'a' }, { b: 'b' }, { c: 'c' } ]);
 });
 
 test('should handle parallel executions', async t => {
@@ -126,9 +126,9 @@ test('should handle parallel executions', async t => {
         }
     };
     const trajectory = new Trajectory(testOptions);
-    const results = await trajectory.execute(definition, 'initial');
-    t.assert(b.calledWith('initial'));
-    t.assert(c.calledWith('initial'));
+    const results = await trajectory.execute(definition);
+    t.assert(b.calledWith({}));
+    t.assert(c.calledWith({}));
 
-    t.deepEqual(results, [ 'initial', [ [ { b: 'b' } ], [ { c: 'c' } ] ], [ [ { b: 'b' } ], [ { c: 'c' } ] ] ]);
+    t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], [ [ { b: 'b' } ], [ { c: 'c' } ] ] ]);
 });

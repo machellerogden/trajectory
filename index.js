@@ -197,7 +197,6 @@ class Trajectory extends EventEmitter {
         const handlers = {
             async * task() {
                 // TODO:
-                //   * retry
                 //   * catch
                 //   * timeoutSeconds
                 yield* attempt(() =>

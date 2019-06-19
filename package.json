@@ -1,7 +1,7 @@
 {
   "name": "trajectory",
   "version": "0.0.3",
-  "description": "Do things",
+  "description": "A workflow orchestration framework",
   "main": "index.js",
   "scripts": {
     "test": "ava test/*.spec.js",

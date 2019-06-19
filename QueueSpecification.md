@@ -42,7 +42,7 @@ interface Task extends BaseState {
     fn: (io: object) => any;
     resultPath?: string;
     parameters?: any;
-    retry?: object;
+    retry?: object[];
     catch?: object;
     timeout?: number;
 }

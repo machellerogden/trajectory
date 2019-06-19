@@ -6,6 +6,7 @@ const set = require('lodash/set');
 const compose = require('lodash/fp/compose');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
+const ordinal = require('ordinal');
 
 const { definitionSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep } = require('./lib/util');
@@ -40,8 +41,14 @@ class Trajectory extends EventEmitter {
         if (report) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data }) {
-        this.report && this.reporter[type]({ name, data, depth: this.depth, options: this.reporterOptions });
+    reportHandler({ type, name, data, msg }) {
+        this.report && this.reporter[type]({
+            name,
+            data,
+            msg,
+            depth: this.depth,
+            options: this.reporterOptions
+        });
     }
 
     async execute(definition, rawInput = {}) {
@@ -84,23 +91,27 @@ class Trajectory extends EventEmitter {
             function recur(value) {
                 if (value == null || typeof value !== 'object') return value;
                 return Array.isArray(value)
-                    ? value.reduce((acc, v, i) => applyP(data, acc, i, v, recur), [])
-                    : Object.entries(value).reduce((acc, [ k, v ]) => applyP(data, acc, k, v, recur), {});
+                    ? value.reduce((result, v, i) =>
+                        applyDataToParameters(data, result, i, v, recur),
+                        [])
+                    : Object.entries(value).reduce((result, [ k, v ]) =>
+                        applyDataToParameters(data, result, k, v, recur),
+                        {});
             }
             return recur(state.parameters);
         }
 
-        function getInput(data) {
+        function fromInput(data) {
             if (state.inputPath == null) return data;
             return JSONPath.query(data, state.inputPath).shift();
         }
 
-        async function getOutput(data) {
+        async function fromOutput(data) {
             if (state.outputPath == null) return data;
             return JSONPath.query(await data, state.outputPath).shift();
         }
 
-        async function setResult(value) {
+        async function toResult(value) {
             if (state.result) return state.result;
             if (state.resultPath == null) return await value;
             return set(clone(io), state.resultPath, await value);
@@ -117,56 +128,121 @@ class Trajectory extends EventEmitter {
             return data;
         }
 
-        async function * output(type, o) {
-            const data = await o;
-            yield { name, data };
-            $this.emit('event', { type, name, data });
-            io = clone(data); // set data for next loop
+        const processInput = compose(applyParameters, fromInput);
+        const processOutput = compose(fromOutput, toResult);
+        const processIO = compose(processOutput, processInput)
+
+        async function * unsafeAttempt(fn) {
+            const output = await fn();
+            yield { name, data: output };
+            $this.emit('event', { type: 'succeed', name, data: output });
+            io = clone(output); // set data for next loop
+        }
+
+        // TODO: factor out procedural nonsense as much as is reasonable
+        async function * attempt(fn) {
+            try {
+                yield* await unsafeAttempt(fn);
+            } catch (err) {
+                let cleared = false;
+                if (state.retry) {
+                    $this.emit('event', {
+                        type: 'info',
+                        name,
+                        msg: `"${name}" failed with error "${err.message}". Will retry.`
+                    });
+                    const retrier = state.retry.find(r => r.errorEquals.includes(err.name));
+                    if (retrier != null) {
+                        let {
+                            intervalSeconds = 0,
+                            backoffRate = 1,
+                            maxAttempts = 1
+                        } = retrier;
+                        let i = 0;
+                        while (i++ < maxAttempts) {
+                            try {
+                                yield* await unsafeAttempt(fn);
+                                cleared = true;
+                                let msg = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                                $this.emit('event', {
+                                    type: 'info',
+                                    name,
+                                    msg
+                                });
+                                break;
+                            } catch (e) {
+                                let msg = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
+                                if (intervalSeconds > 0 && i < maxAttempts) msg += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
+                                $this.emit('event', {
+                                    type: 'info',
+                                    name,
+                                    msg
+                                });
+                            }
+                            if (intervalSeconds) {
+                                await sleep(intervalSeconds);
+                                intervalSeconds *= backoffRate;
+                            }
+                        }
+                    }
+                }
+                if (!cleared) {
+                    yield { name, data: err };
+                    $this.emit('event', { type: 'error', name, data: err });
+                    throw err;
+                }
+            }
         }
 
         const handlers = {
             async * task() {
-                const processIO = compose(getOutput, setResult, state.fn, applyParameters, getInput);
-                yield* output('succeed', processIO(io));
+                // TODO:
+                //   * retry
+                //   * catch
+                //   * timeoutSeconds
+                yield* attempt(() =>
+                    compose(processOutput, state.fn, processInput)(io));
             },
             async * pass() {
-                const processIO = compose(getOutput, setResult, applyParameters, getInput);
-                yield* output('succeed', processIO(io));
+                yield* attempt(() =>
+                    processIO(io));
             },
             async * wait() {
-                const processIO = compose(getOutput, delay, getInput);
-                yield* output('succeed', processIO(io));
-            },
-            async * succeed() {
-                const processIO = compose(getOutput, getInput);
-                yield* output('succeed', processIO(io));
-            },
-            async * fail() {
-                const processIO = compose(getOutput, getInput);
-                const out = processIO(io);
-                const err = { name, out };
-                const errMsg = [];
-                if (state.error) {
-                    err.error = state.error;
-                    errMsg.push(err.error);
-                }
-                if (state.cause) {
-                    err.cause = state.cause;
-                    errMsg.push(err.cause);
-                }
-                yield* output('fail', err);
-                throw new Error(errMsg.join(': '));
+                yield* attempt(() =>
+                    compose(fromOutput, delay, fromInput)(io));
             },
             async * parallel() {
-                $this.depth++;
-                const input = getInput(io);
-                const out = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
-                const processOutput = compose(getOutput, setResult);
-                $this.depth--;
-                yield* output('succeed', processOutput(out));
+                yield* attempt(async () => {
+                    $this.depth++;
+                    const input = fromInput(io);
+                    const output = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
+                    $this.depth--;
+                    return processOutput(output);
+                });
             },
             async * choice() {
                 // TODO
+            },
+            async * succeed() {
+                yield* attempt(() =>
+                    compose(fromOutput, fromInput)(io));
+            },
+            async * fail() {
+                const err = {
+                    name,
+                    error: state.error,
+                    cause: state.cause
+                };
+                const errMsg = [];
+                if (state.error) errMsg.push(err.error);
+                if (state.cause) errMsg.push(err.cause);
+                $this.emit('event', {
+                    type: 'fail',
+                    name,
+                    data: err
+                });
+                yield { name, data: err };
+                throw new Error(errMsg.join(': '));
             }
         };
 
@@ -181,11 +257,11 @@ class Trajectory extends EventEmitter {
 
 module.exports = { Trajectory };
 
-function applyP(d, a, k, v, fn) {
-    if (k.endsWith('.$')) {
-        a[k.slice(0, -2)] = JSONPath.query(d, v).shift();
+function applyDataToParameters(data, result = {}, key, value, recur) {
+    if (key.endsWith('.$')) {
+        result[key.slice(0, -2)] = JSONPath.query(data, value).shift();
     } else {
-        a[k] = fn(v[k]);
+        result[key] = recur(value[key]);
     }
-    return a;
+    return result;
 }

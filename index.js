@@ -195,36 +195,30 @@ class Trajectory extends EventEmitter {
         }
 
         const handlers = {
-            async * task() {
+            async task() {
                 // TODO:
                 //   * catch
                 //   * timeoutSeconds
-                yield* attempt(() =>
-                    compose(processOutput, state.fn, processInput)(io));
+                return compose(processOutput, state.fn, processInput)(io);
             },
-            async * pass() {
-                yield* attempt(() =>
-                    processIO(io));
+            async pass() {
+                return processIO(io);
             },
-            async * wait() {
-                yield* attempt(() =>
-                    compose(fromOutput, delay, fromInput)(io));
+            async wait() {
+                return compose(fromOutput, delay, fromInput)(io);
             },
-            async * parallel() {
-                yield* attempt(async () => {
-                    $this.depth++;
-                    const input = fromInput(io);
-                    const output = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
-                    $this.depth--;
-                    return processOutput(output);
-                });
+            async parallel() {
+                $this.depth++;
+                const input = fromInput(io);
+                const output = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
+                $this.depth--;
+                return processOutput(output);
             },
-            async * choice() {
+            async choice() {
                 // TODO
             },
-            async * succeed() {
-                yield* attempt(() =>
-                    compose(fromOutput, fromInput)(io));
+            async succeed() {
+                return compose(fromOutput, fromInput)(io);
             },
             async * fail() {
                 const err = {
@@ -247,7 +241,8 @@ class Trajectory extends EventEmitter {
 
         while (true) {
             $this.emit('event', { type: 'start', name });
-            yield* handlers[state.type]();
+            if (state.type === 'fail') yield* handlers[state.type]();
+            yield* attempt(handlers[state.type]);
             if (isEnd(state)) return;
             next();
         }

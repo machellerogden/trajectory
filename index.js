@@ -26,26 +26,26 @@ class Trajectory extends EventEmitter {
 
         const {
             debug = false,
-            report = true,
+            silent = false,
             reporter = builtInReporter,
             reporterOptions = {}
         } = options;
 
         super();
 
-        this.report = report;
+        this.silent = silent;
         this.reporter = reporter;
         this.depth = 0;
         this.reporterOptions = reporterOptions;
 
-        if (report) this.on('event', this.reportHandler);
+        if (!silent) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data, msg }) {
-        this.report && this.reporter[type]({
+    reportHandler({ type, name, data, message }) {
+        this.reporter[type]({
             name,
             data,
-            msg,
+            message,
             depth: this.depth,
             options: this.reporterOptions
         });
@@ -68,188 +68,235 @@ class Trajectory extends EventEmitter {
 
     async executeQueue(queue, input) {
         const results = [];
-        for await (const result of this.schedule(queue, clone(input))) results.push(result.data);
+        const scheduleIterator = this.schedule(queue, clone(input));
+        for await (const result of scheduleIterator) {
+            results.push(result.data);
+        }
         return results;
     }
 
-    async * schedule(queue, io) {
+    async* schedule(queue, io) {
         const { startAt, states } = queue;
-        const $this = this;
 
-        if (states == null || states[startAt] == null) throw new Error(`Unable to resolve state "${startAt}".`);
+        if (states == null || states[startAt] == null) {
+            throw new Error(`Unable to resolve state "${startAt}".`);
+        }
+
+        const context = this;
+
+        const emit = event => this.emit('event', event);
 
         let name = startAt;
         let state = states[startAt];
-
-        function next() {
+        const next = () => {
             name = state.next;
             state = states[state.next];
-        }
+        };
 
-        function applyParameters(data) {
-            if (state.parameters == null) return data;
-            function recur(value) {
-                if (value == null || typeof value !== 'object') return value;
-                return Array.isArray(value)
-                    ? value.reduce((result, v, i) =>
-                        applyDataToParameters(data, result, i, v, recur),
-                        [])
-                    : Object.entries(value).reduce((result, [ k, v ]) =>
-                        applyDataToParameters(data, result, k, v, recur),
-                        {});
-            }
-            return recur(state.parameters);
-        }
+        this.getIO = () => clone(io);
+        this.setIO = v => io = clone(v);
+        this.getState = () => state;
 
-        function fromInput(data) {
-            if (state.inputPath == null) return data;
-            return JSONPath.query(data, state.inputPath).shift();
-        }
+        const handlers = Handlers(context);
 
-        async function fromOutput(data) {
-            if (state.outputPath == null) return data;
-            return JSONPath.query(await data, state.outputPath).shift();
-        }
-
-        async function toResult(value) {
-            if (state.result) return state.result;
-            if (state.resultPath == null) return await value;
-            return set(clone(io), state.resultPath, await value);
-        }
-
-        async function delay(data) {
-            if (state.seconds != null) {
-                await sleep(state.seconds);
-            } else if (state.secondsPath != null) {
-                const seconds = JSONPath.query(data, state.secondsPath);
-                if (typeof seconds !== 'number') throw new Error(`secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`);
-                await sleep(seconds);
-            }
-            return data;
-        }
-
-        const processInput = compose(applyParameters, fromInput);
-        const processOutput = compose(fromOutput, toResult);
-        const processIO = compose(processOutput, processInput)
-
-        async function * unsafeAttempt(fn) {
-            const output = await fn();
+        async function* unsafeAttempt(fn) {
+            const output = await fn(state, io);
             yield { name, data: output };
-            $this.emit('event', { type: 'succeed', name, data: output });
-            io = clone(output); // set data for next loop
+            emit({ type: 'succeed', name, data: output });
+            context.setIO(output); // set data for next loop
         }
 
-        // TODO: factor out procedural nonsense as much as is reasonable
-        async function * attempt(fn) {
-            try {
-                yield* await unsafeAttempt(fn);
-            } catch (err) {
-                let cleared = false;
-                if (state.retry) {
-                    $this.emit('event', {
-                        type: 'info',
-                        name,
-                        msg: `"${name}" failed with error "${err.message}". Will retry.`
-                    });
-                    const retrier = state.retry.find(r => r.errorEquals.includes(err.name));
-                    if (retrier != null) {
-                        let {
-                            intervalSeconds = 0,
-                            backoffRate = 1,
-                            maxAttempts = 1
-                        } = retrier;
-                        let i = 0;
-                        while (i++ < maxAttempts) {
-                            try {
-                                yield* await unsafeAttempt(fn);
-                                cleared = true;
-                                let msg = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
-                                $this.emit('event', {
-                                    type: 'info',
-                                    name,
-                                    msg
-                                });
-                                break;
-                            } catch (e) {
-                                let msg = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
-                                if (intervalSeconds > 0 && i < maxAttempts) msg += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
-                                $this.emit('event', {
-                                    type: 'info',
-                                    name,
-                                    msg
-                                });
-                            }
-                            if (intervalSeconds) {
-                                await sleep(intervalSeconds);
-                                intervalSeconds *= backoffRate;
-                            }
+        async function* retry(fn, error) {
+            let cleared = false;
+            if (state.retry) {
+                emit({
+                    type: 'info',
+                    name,
+                    message: `"${name}" failed with error "${error.message}". Will retry.`
+                });
+                const retrier = state.retry.find(r => r.errorEquals.includes(error.name));
+                if (retrier != null) {
+                    let {
+                        intervalSeconds = 0,
+                        backoffRate = 1,
+                        maxAttempts = 1
+                    } = retrier;
+                    let i = 0;
+                    while (i++ < maxAttempts) {
+                        try {
+                            yield* await unsafeAttempt(fn);
+                            cleared = true;
+                            let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                            emit({
+                                type: 'info',
+                                name,
+                                message
+                            });
+                            break;
+                        } catch (e) {
+                            let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
+                            if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
+                            emit({
+                                type: 'info',
+                                name,
+                                message
+                            });
+                        }
+                        if (intervalSeconds) {
+                            await sleep(intervalSeconds);
+                            intervalSeconds *= backoffRate;
                         }
                     }
                 }
-                if (!cleared) {
-                    yield { name, data: err };
-                    $this.emit('event', { type: 'error', name, data: err });
-                    throw err;
-                }
+            }
+            if (!cleared) {
+                yield { name, data: error };
+                emit({ type: 'error', name, data: error });
+                throw error;
             }
         }
 
-        const handlers = {
-            async task() {
-                // TODO:
-                //   * catch
-                //   * timeoutSeconds
-                return compose(processOutput, state.fn, processInput)(io);
-            },
-            async pass() {
-                return processIO(io);
-            },
-            async wait() {
-                return compose(fromOutput, delay, fromInput)(io);
-            },
-            async parallel() {
-                $this.depth++;
-                const input = fromInput(io);
-                const output = await Promise.all(state.branches.map(branch => $this.executeQueue(branch, input)));
-                $this.depth--;
-                return processOutput(output);
-            },
-            async choice() {
-                // TODO
-            },
-            async succeed() {
-                return compose(fromOutput, fromInput)(io);
-            },
-            async * fail() {
-                const err = {
-                    name,
-                    error: state.error,
-                    cause: state.cause
-                };
-                const errMsg = [];
-                if (state.error) errMsg.push(err.error);
-                if (state.cause) errMsg.push(err.cause);
-                $this.emit('event', {
-                    type: 'fail',
-                    name,
-                    data: err
-                });
-                yield { name, data: err };
-                throw new Error(errMsg.join(': '));
+        async function* attempt(fn) {
+            if (state.type === 'fail') return yield* await fn(state, io);
+            try {
+                yield* await unsafeAttempt(fn);
+            } catch (error) {
+                yield* await retry(fn, error);
             }
-        };
+        }
 
         while (true) {
-            $this.emit('event', { type: 'start', name });
-            if (state.type === 'fail') yield* handlers[state.type]();
-            yield* attempt(handlers[state.type]);
-            if (isEnd(state)) return;
+            emit({ type: 'start', name });
+            if (state.type === 'fail') {
+                yield* abort(name, state, emit);
+            } else {
+                yield* attempt(handlers[state.type]);
+                if (isEnd(state)) return;
+            }
             next();
         }
     }
 }
 
+function* abort(name, state, emit) {
+    const { type, error, cause } = state;
+    const data = { name, error, cause };
+    const errMsg = [];
+    if (error) errMsg.push(error);
+    if (cause) errMsg.push(cause);
+    yield { name, data };
+    emit({ type, name, data });
+    throw new Error(errMsg.join(': '));
+}
+
 module.exports = { Trajectory };
+
+function Handlers(context) {
+
+    const {
+        applyParameters,
+        fromInput,
+        fromOutput,
+        toResult,
+        delayOutput,
+        processInput,
+        processOutput,
+        processIO
+    } = IOCtrl(context);
+
+    return {
+        async task(state, io) {
+            // TODO:
+            //   * catch
+            //   * timeoutSeconds
+            return compose(processOutput, state.fn, processInput)(io);
+        },
+        async pass(state, io) {
+            return processIO(io);
+        },
+        async wait(state, io) {
+            return compose(fromOutput, delayOutput, fromInput)(io);
+        },
+        async parallel(state, io) {
+            context.depth++;
+            const input = fromInput(io);
+            const output = await Promise.all(state.branches.map(branch => context.executeQueue(branch, input)));
+            context.depth--;
+            return processOutput(output);
+        },
+        async choice(state, io) {
+            // TODO
+        },
+        async succeed(state, io) {
+            return compose(fromOutput, fromInput)(io);
+        }
+    };
+}
+
+function IOCtrl({ getState, getIO }) {
+
+    function applyParameters(data) {
+        const state = getState();
+        if (state.parameters == null) return data;
+        function recur(value) {
+            if (value == null || typeof value !== 'object') return value;
+            return Array.isArray(value)
+                ? value.reduce((result, v, i) =>
+                    applyDataToParameters(data, result, i, v, recur),
+                    [])
+                    : Object.entries(value).reduce((result, [ k, v ]) =>
+                        applyDataToParameters(data, result, k, v, recur),
+                        {});
+        }
+        return recur(state.parameters);
+    }
+
+    function fromInput(data) {
+        const state = getState();
+        if (state.inputPath == null) return data;
+        return JSONPath.query(data, state.inputPath).shift();
+    }
+
+    async function fromOutput(data) {
+        const state = getState();
+        if (state.outputPath == null) return data;
+        return JSONPath.query(await data, state.outputPath).shift();
+    }
+
+    async function toResult(value) {
+        const state = getState();
+        if (state.result) return state.result;
+        if (state.resultPath == null) return await value;
+        return set(getIO(), state.resultPath, await value);
+    }
+
+    async function delayOutput(data) {
+        const state = getState();
+        if (state.seconds != null) {
+            await sleep(state.seconds);
+        } else if (state.secondsPath != null) {
+            const seconds = JSONPath.query(data, state.secondsPath);
+            if (typeof seconds !== 'number') throw new Error(`secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`);
+            await sleep(seconds);
+        }
+        return data;
+    }
+
+    const processInput = compose(applyParameters, fromInput);
+    const processOutput = compose(fromOutput, toResult);
+    const processIO = compose(processOutput, processInput)
+
+    return {
+        applyParameters,
+        fromInput,
+        fromOutput,
+        toResult,
+        delayOutput,
+        processInput,
+        processOutput,
+        processIO
+    };
+}
 
 function applyDataToParameters(data, result = {}, key, value, recur) {
     if (key.endsWith('.$')) {

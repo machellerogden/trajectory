@@ -141,10 +141,10 @@ class Trajectory extends EventEmitter {
                                 name,
                                 message
                             });
-                        }
-                        if (intervalSeconds) {
-                            await sleep(intervalSeconds);
-                            intervalSeconds *= backoffRate;
+                            if (intervalSeconds) {
+                                await sleep(intervalSeconds);
+                                intervalSeconds *= backoffRate;
+                            }
                         }
                     }
                 }
@@ -170,6 +170,10 @@ class Trajectory extends EventEmitter {
             if (state.type === 'fail') {
                 yield* abort(name, state, emit);
             } else {
+                //const gen = attempt(handlers[state.type]);
+                //const result = await gen.next();
+                //console.log(result);
+                //yield result;
                 yield* attempt(handlers[state.type]);
                 if (isEnd(state)) return;
             }

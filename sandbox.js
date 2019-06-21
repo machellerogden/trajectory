@@ -72,12 +72,12 @@ const h = () => ({ g: 'h' });
                             startAt: 'f',
                             states: {
                                 f: {
-                                    type: 'fail',
-                                    error: 'messed up',
-                                    cause: 'human error'
-                                    //type: 'task',
-                                    //fn: f,
-                                    //next: 'z'
+                                    //type: 'fail',
+                                    //error: 'messed up',
+                                    //cause: 'human error'
+                                    type: 'task',
+                                    fn: f,
+                                    next: 'z'
                                 },
                                 z: {
                                     type: 'wait',

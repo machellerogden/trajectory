@@ -9,8 +9,8 @@ const serializeError = require('serialize-error');
 const ordinal = require('ordinal');
 
 const { definitionSchema, optionsSchema, inputSchema } = require('./lib/schema');
-const { sleep } = require('./lib/util');
-const { isEnd } = require('./lib/helpers');
+const { sleep, reduceAny } = require('./lib/util');
+const { isEnd, applyDataToParameters } = require('./lib/helpers');
 
 const builtInReporter = require('./lib/reporter');
 
@@ -88,6 +88,7 @@ class Trajectory extends EventEmitter {
 
         let name = startAt;
         let state = states[startAt];
+
         const next = () => {
             name = state.next;
             state = states[state.next];
@@ -167,16 +168,14 @@ class Trajectory extends EventEmitter {
 
         while (true) {
             emit({ type: 'start', name });
+
             if (state.type === 'fail') {
                 yield* abort(name, state, emit);
             } else {
-                //const gen = attempt(handlers[state.type]);
-                //const result = await gen.next();
-                //console.log(result);
-                //yield result;
                 yield* attempt(handlers[state.type]);
                 if (isEnd(state)) return;
             }
+
             next();
         }
     }
@@ -242,16 +241,9 @@ function IOCtrl({ getState, getIO }) {
     function applyParameters(data) {
         const state = getState();
         if (state.parameters == null) return data;
-        function recur(value) {
-            if (value == null || typeof value !== 'object') return value;
-            return Array.isArray(value)
-                ? value.reduce((result, v, i) =>
-                    applyDataToParameters(data, result, i, v, recur),
-                    [])
-                    : Object.entries(value).reduce((result, [ k, v ]) =>
-                        applyDataToParameters(data, result, k, v, recur),
-                        {});
-        }
+        const recur = value =>
+            reduceAny(value, (result, v, k) =>
+                applyDataToParameters(data, result, k, v, recur));
         return recur(state.parameters);
     }
 
@@ -280,7 +272,10 @@ function IOCtrl({ getState, getIO }) {
             await sleep(state.seconds);
         } else if (state.secondsPath != null) {
             const seconds = JSONPath.query(data, state.secondsPath);
-            if (typeof seconds !== 'number') throw new Error(`secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`);
+            if (typeof seconds !== 'number') {
+                const msg = `secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`; 
+                throw new Error(msg);
+            }
             await sleep(seconds);
         }
         return data;
@@ -302,11 +297,3 @@ function IOCtrl({ getState, getIO }) {
     };
 }
 
-function applyDataToParameters(data, result = {}, key, value, recur) {
-    if (key.endsWith('.$')) {
-        result[key.slice(0, -2)] = JSONPath.query(data, value).shift();
-    } else {
-        result[key] = recur(value[key]);
-    }
-    return result;
-}

@@ -4,7 +4,7 @@ import test from 'ava';
 import sinon from 'sinon';
 import { Trajectory } from '..';
 
-const testOptions = { report: false };
+const testOptions = { silent: true };
 
 test.beforeEach(t => t.context = { sandbox: sinon.createSandbox() });
 test.afterEach(t => t.context.sandbox.restore());
@@ -420,6 +420,5 @@ test('should handle parallel executions', async t => {
     const results = await trajectory.execute(definition);
     t.assert(b.calledWith({}));
     t.assert(c.calledWith({}));
-
-    t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], [ [ { b: 'b' } ], [ { c: 'c' } ] ] ]);
+    t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], {} ]);
 });

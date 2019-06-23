@@ -15,7 +15,7 @@ const d = () => ({ d: 'd' });
 const e = () => ({ e: 'e' });
 const f = () => ({ f: 'f' });
 const g = () => ({ g: 'g' });
-const h = () => ({ g: 'h' });
+const h = v => v;
 (async () => {
     const results = await t.execute({
         kind: 'queue',
@@ -51,7 +51,7 @@ const h = () => ({ g: 'h' });
                 },
                 parallel: {
                     type: 'parallel',
-                    outputPath: '$.1.0',
+                    //outputPath: '$.1.0',
                     branches: [
                         {
                             startAt: 'd',

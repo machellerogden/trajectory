@@ -29,10 +29,10 @@
 
 const { Cancel } = require('./lib/cancel');
 
-function sleep(ms, whenCancelled) {
+function sleep(ms, onCancel) {
     return new Promise((resolve, reject) => {
         setTimeout(() => resolve('success'), ms);
-        whenCancelled.then(() => reject(new Error('cancelled')));
+        onCancel.then(() => reject(new Error('cancelled')));
     });
 }
 
@@ -42,7 +42,7 @@ function sleep(ms, whenCancelled) {
 
     async function* loop() {
         while (true) {
-            yield await c.cancellable(whenCancelled => sleep(1000, whenCancelled));
+            yield await c.cancellable(({ onCancel }) => sleep(1000, onCancel));
         }
     }
 

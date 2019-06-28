@@ -8,6 +8,8 @@ const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 const ordinal = require('ordinal');
 
+const CancellationContext = require('cancellation-context');
+
 const { definitionSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep, reduceAny } = require('./lib/util');
 const { isEnd, applyDataToParameters } = require('./lib/helpers');
@@ -33,11 +35,13 @@ class Trajectory extends EventEmitter {
 
         super();
 
-        this.silent = silent;
+        this.cc = CancellationContext();
+
         this.reporter = reporter;
         this.depth = 0;
         this.reporterOptions = reporterOptions;
 
+        this.silent = silent;
         if (!silent) this.on('event', this.reportHandler);
     }
 

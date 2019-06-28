@@ -18,7 +18,7 @@
   "license": "MIT",
   "dependencies": {
     "@hapi/joi": "^15.0.3",
-    "cancellation-context": "0.0.0",
+    "cancellation-context": "0.2.5",
     "chalk": "^2.4.2",
     "jsonpath": "^1.0.2",
     "jsonpath-plus": "^0.20.1",

@@ -15,6 +15,7 @@ const d = () => ({ d: 'd' });
 const e = () => ({ e: 'e' });
 const f = () => ({ f: 'f' });
 const g = () => ({ g: 'g' });
+//const g = () => Promise.reject();
 const h = v => v;
 (async () => {
     const results = await t.execute({
@@ -62,9 +63,12 @@ const h = v => v;
                                     next: 'e'
                                 },
                                 e: {
-                                    type: 'task',
-                                    fn: e,
-                                    end: true
+                                    type: 'fail',
+                                    error: 'messed up',
+                                    cause: 'human error'
+                                    //type: 'task',
+                                    //fn: e,
+                                    //end: true
                                 }
                             }
                         },
@@ -72,9 +76,6 @@ const h = v => v;
                             startAt: 'f',
                             states: {
                                 f: {
-                                    //type: 'fail',
-                                    //error: 'messed up',
-                                    //cause: 'human error'
                                     type: 'task',
                                     fn: f,
                                     next: 'z'

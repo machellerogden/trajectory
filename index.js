@@ -62,12 +62,12 @@ class Trajectory extends EventEmitter {
         try {
             results = await this.executeQueue(queue, input);
             this.emit('event', { type: 'complete', name: 'completed', data: results })
+            return [ input, ...results ];
         } catch (e) {
             const { stack } = serializeError(e);
             console.error(stack);
-            process.exit(2);
+            this.cc.cancelAll();
         }
-        return [ input, ...results ];
     }
 
     async executeQueue(queue, input) {
@@ -111,45 +111,88 @@ class Trajectory extends EventEmitter {
             context.setIO(output); // set data for next loop
         }
 
-        async function* retry(fn, error) {
-            let cleared = false;
+        async function* handleError(fn, error) {
+            emit({
+                type: 'info',
+                name,
+                message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
+            });
+            // TODO: get rid of procedural non-sense
             if (state.retry) {
+                try {
+                    yield* await retry(fn, error);
+                } catch (retryError) {
+                    if (state.error) {
+                        yield* await catchError(fn, retryError);
+                    } else {
+                        throw retryError;
+                    }
+                }
+            } else if (state.catch) {
+                yield* await catchError(fn, error);
+            } else {
+                throw error;
+            }
+        }
+
+        async function* catchError(fn, error) {
+            const catcher = state.catch.find(c => c.errorEquals.includes(error.name));
+            if (catcher != null) {
                 emit({
                     type: 'info',
                     name,
-                    message: `"${name}" failed with error "${error.message}". Will retry.`
+                    message: `Catching error in "${name}"`
                 });
-                const retrier = state.retry.find(r => r.errorEquals.includes(error.name));
-                if (retrier != null) {
-                    let {
-                        intervalSeconds = 0,
-                        backoffRate = 1,
-                        maxAttempts = 1
-                    } = retrier;
-                    let i = 0;
-                    while (i++ < maxAttempts) {
-                        try {
-                            yield* await unsafeAttempt(fn);
-                            cleared = true;
-                            let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
-                            emit({
-                                type: 'info',
-                                name,
-                                message
-                            });
-                            break;
-                        } catch (e) {
-                            let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
-                            if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
-                            emit({
-                                type: 'info',
-                                name,
-                                message
-                            });
-                            if (intervalSeconds) {
-                                await sleep(intervalSeconds);
-                                intervalSeconds *= backoffRate;
-                            }
+                const errorOutput = { error: error };
+                yield catcher.resultPath != null
+                    ? set(context.getIO(), catcher.resultPath, errorOutput)
+                    : errorOutput;
+                delete state.end;
+                state.next = catcher.next;
+            } else {
+                yield { name, data: error };
+                emit({ type: 'error', name, data: error });
+                throw error;
+            }
+        }
+
+        async function* retry(fn, error) {
+            let cleared = false;
+            const retrier = state.retry.find(r => r.errorEquals.includes(error.name));
+            if (retrier != null) {
+                emit({
+                    type: 'info',
+                    name,
+                    message: `Retrying "${name}" after error`
+                });
+                let {
+                    intervalSeconds = 0,
+                    backoffRate = 1,
+                    maxAttempts = 1
+                } = retrier;
+                let i = 0;
+                while (i++ < maxAttempts) {
+                    try {
+                        yield* await unsafeAttempt(fn);
+                        cleared = true;
+                        let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                        emit({
+                            type: 'info',
+                            name,
+                            message
+                        });
+                        break;
+                    } catch (e) {
+                        let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
+                        if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
+                        emit({
+                            type: 'info',
+                            name,
+                            message
+                        });
+                        if (intervalSeconds) {
+                            await sleep(intervalSeconds);
+                            intervalSeconds *= backoffRate;
                         }
                     }
                 }
@@ -166,19 +209,17 @@ class Trajectory extends EventEmitter {
             try {
                 yield* await unsafeAttempt(fn);
             } catch (error) {
-                yield* await retry(fn, error);
+                yield* await handleError(fn, error);
             }
         }
 
         while (true) {
             emit({ type: 'start', name });
 
-            if (state.type === 'fail') {
-                yield* abort(name, state, emit);
-            } else {
-                yield* attempt(handlers[state.type]);
-                if (isEnd(state)) return;
-            }
+            yield* state.type === 'fail'
+                ? abort(name, state, emit)
+                : attempt(handlers[state.type]);
+            if (isEnd(state)) return;
 
             next();
         }
@@ -216,7 +257,8 @@ function Handlers(context) {
             // TODO:
             //   * catch
             //   * timeoutSeconds
-            return compose(processOutput, state.fn, processInput)(io);
+            const cancellableFn = io => context.cc.Cancellable(onCancel => state.fn(io, onCancel));
+            return compose(processOutput, cancellableFn, processInput)(io);
         },
         async pass(state, io) {
             return processIO(io);
@@ -240,7 +282,7 @@ function Handlers(context) {
     };
 }
 
-function IOCtrl({ getState, getIO }) {
+function IOCtrl({ getState, getIO, cc }) {
 
     function applyParameters(data) {
         const state = getState();
@@ -272,16 +314,16 @@ function IOCtrl({ getState, getIO }) {
 
     async function delayOutput(data) {
         const state = getState();
-        if (state.seconds != null) {
-            await sleep(state.seconds);
-        } else if (state.secondsPath != null) {
-            const seconds = JSONPath.query(data, state.secondsPath);
-            if (typeof seconds !== 'number') {
-                const msg = `secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`; 
-                throw new Error(msg);
-            }
-            await sleep(seconds);
+        const seconds = (state.seconds != null)
+            ? state.seconds
+            : (state.secondsPath != null)
+                ? JSONPath.query(data, state.secondsPath)
+                : null;
+        if (typeof seconds !== 'number') {
+            const msg = `secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`; 
+            throw new Error(msg);
         }
+        await cc.CancellableTimeout(seconds * 1000);
         return data;
     }
 

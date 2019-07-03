@@ -1,7 +1,22 @@
 const { Trajectory } = require('.');
 const t = new Trajectory();
-const a = async () => Promise.resolve({ a: 'a' });
-//const b = () => ({ b: 'b' });
+
+const a = async (input, onCancel) => new Promise((resolve, reject) => {
+    const handle = setTimeout(() => resolve({ a: 'a' }), 1000);
+    onCancel(reason => {
+        clearTimeout(handle);
+        reject(reason);
+    });
+});
+
+const aa = async (input, onCancel) => new Promise((resolve, reject) => {
+    const handle = setTimeout(() => reject(new Error('boom')), 500);
+    onCancel(reason => {
+        clearTimeout(handle);
+        reject(reason);
+    });
+});
+
 let i = 0;
 const b = () => {
     if (i++ < 5) {
@@ -10,6 +25,7 @@ const b = () => {
         return { b: 'b' };
     }
 };
+
 const c = () => ({ c: 'c' });
 const d = () => ({ d: 'd' });
 const e = () => ({ e: 'e' });
@@ -17,17 +33,52 @@ const f = () => ({ f: 'f' });
 const g = () => ({ g: 'g' });
 //const g = () => Promise.reject();
 const h = v => v;
+
 (async () => {
     const results = await t.execute({
         kind: 'queue',
         version: '1.0.0',
         spec: {
-            startAt: 'a',
+            startAt: 'parallelA',
             states: {
-                a: {
-                    type: 'task',
-                    fn: a,
-                    resultPath: 'aaa',
+                parallelA: {
+                    type: 'parallel',
+                    branches: [
+                        {
+                            startAt: 'a',
+                            states: {
+                                a: {
+                                    type: 'task',
+                                    fn: a,
+                                    resultPath: 'a',
+                                    end: true
+                                },
+                            }
+                        },
+                        {
+                            startAt: 'aa',
+                            states: {
+                                aa: {
+                                    type: 'task',
+                                    fn: aa,
+                                    resultPath: 'aa',
+                                    catch: [
+                                        {
+                                            errorEquals: [ 'Error' ],
+                                            resultPath: 'myerror',
+                                            next: 'bb'
+                                        }
+                                    ],
+                                    end: true
+                                },
+                                bb: {
+                                    type: 'task',
+                                    fn: v => ({ recovered: v}),
+                                    end: true
+                                }
+                            }
+                        }
+                    ],
                     next: 'b'
                 },
                 b: {
@@ -63,12 +114,12 @@ const h = v => v;
                                     next: 'e'
                                 },
                                 e: {
-                                    type: 'fail',
-                                    error: 'messed up',
-                                    cause: 'human error'
-                                    //type: 'task',
-                                    //fn: e,
-                                    //end: true
+                                    //type: 'fail',
+                                    //error: 'messed up',
+                                    //cause: 'human error'
+                                    type: 'task',
+                                    fn: e,
+                                    end: true
                                 }
                             }
                         },

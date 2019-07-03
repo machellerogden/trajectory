@@ -248,7 +248,6 @@ function Handlers(context) {
     return {
         async task(state, io) {
             // TODO:
-            //   * catch
             //   * timeoutSeconds
             const cancellableFn = io => context.cc.Cancellable(onCancel => state.fn(io, onCancel));
             return compose(processOutput, cancellableFn, processInput)(io);

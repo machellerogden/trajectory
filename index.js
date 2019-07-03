@@ -117,38 +117,20 @@ class Trajectory extends EventEmitter {
                 name,
                 message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
             });
-            // TODO: get rid of procedural non-sense
-            if (state.retry) {
+            const retrier = (state.retry || []).find(r => r.errorEquals.includes(error.name));
+            const catcher = (state.catch || []).find(c => c.errorEquals.includes(error.name));
+            if (retrier) {
                 try {
-                    yield* await retry(fn, error);
+                    yield* await retry(retrier, fn, error);
                 } catch (retryError) {
-                    if (state.error) {
-                        yield* await catchError(fn, retryError);
+                    if (catcher) {
+                        yield* await catchError(catcher, fn, retryError);
                     } else {
                         throw retryError;
                     }
                 }
-            } else if (state.catch) {
-                yield* await catchError(fn, error);
-            } else {
-                throw error;
-            }
-        }
-
-        async function* catchError(fn, error) {
-            const catcher = state.catch.find(c => c.errorEquals.includes(error.name));
-            if (catcher != null) {
-                emit({
-                    type: 'info',
-                    name,
-                    message: `Catching error in "${name}"`
-                });
-                const errorOutput = { error: error };
-                yield catcher.resultPath != null
-                    ? set(context.getIO(), catcher.resultPath, errorOutput)
-                    : errorOutput;
-                delete state.end;
-                state.next = catcher.next;
+            } else if (catcher) {
+                yield* await catchError(catcher, fn, error);
             } else {
                 yield { name, data: error };
                 emit({ type: 'error', name, data: error });
@@ -156,44 +138,55 @@ class Trajectory extends EventEmitter {
             }
         }
 
-        async function* retry(fn, error) {
+        async function* catchError(catcher, fn, error) {
+            emit({
+                type: 'info',
+                name,
+                message: `Catching error in "${name}"`
+            });
+            const errorOutput = { error: error };
+            yield catcher.resultPath != null
+                ? set(context.getIO(), catcher.resultPath, errorOutput)
+                : errorOutput;
+            delete state.end;
+            state.next = catcher.next;
+        }
+
+        async function* retry(retrier, fn, error) {
             let cleared = false;
-            const retrier = state.retry.find(r => r.errorEquals.includes(error.name));
-            if (retrier != null) {
-                emit({
-                    type: 'info',
-                    name,
-                    message: `Retrying "${name}" after error`
-                });
-                let {
-                    intervalSeconds = 0,
-                    backoffRate = 1,
-                    maxAttempts = 1
-                } = retrier;
-                let i = 0;
-                while (i++ < maxAttempts) {
-                    try {
-                        yield* await unsafeAttempt(fn);
-                        cleared = true;
-                        let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
-                        emit({
-                            type: 'info',
-                            name,
-                            message
-                        });
-                        break;
-                    } catch (e) {
-                        let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
-                        if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
-                        emit({
-                            type: 'info',
-                            name,
-                            message
-                        });
-                        if (intervalSeconds) {
-                            await sleep(intervalSeconds);
-                            intervalSeconds *= backoffRate;
-                        }
+            emit({
+                type: 'info',
+                name,
+                message: `Retrying "${name}" after error`
+            });
+            let {
+                intervalSeconds = 0,
+                backoffRate = 1,
+                maxAttempts = 1
+            } = retrier;
+            let i = 0;
+            while (i++ < maxAttempts) {
+                try {
+                    yield* await unsafeAttempt(fn);
+                    cleared = true;
+                    let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                    emit({
+                        type: 'info',
+                        name,
+                        message
+                    });
+                    break;
+                } catch (e) {
+                    let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
+                    if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
+                    emit({
+                        type: 'info',
+                        name,
+                        message
+                    });
+                    if (intervalSeconds) {
+                        await sleep(intervalSeconds);
+                        intervalSeconds *= backoffRate;
                     }
                 }
             }

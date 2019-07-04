@@ -10,6 +10,7 @@ const a = async (input, onCancel) => new Promise((resolve, reject) => {
 });
 
 const aa = async (input, onCancel) => new Promise((resolve, reject) => {
+    //const handle = setTimeout(() => resolve({ aa: 'aa' }), 500);
     const handle = setTimeout(() => reject(new Error('boom')), 500);
     onCancel(reason => {
         clearTimeout(handle);
@@ -51,6 +52,7 @@ const h = v => v;
                                     type: 'task',
                                     fn: a,
                                     resultPath: 'a',
+                                    //timeoutSeconds: 0.3,
                                     end: true
                                 },
                             }

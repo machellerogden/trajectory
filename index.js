@@ -273,6 +273,29 @@ function Handlers(context) {
         },
         async Choice(state, io) {
             // TODO
+            //const choice = (state.Choices || []).find(c => {
+                //if (c.And) {
+                //} else if (c.Or) {
+                //} else if (c.Not) {
+                //}
+                //BooleanEquals
+                //NumericEquals
+                //NumericGreaterThan
+                //NumericGreaterThanEquals
+                //NumericLessThan
+                //NumericLessThanEquals
+                //StringEquals
+                //StringGreaterThan
+                //StringGreaterThanEquals
+                //StringLessThan
+                //StringLessThanEquals
+                //TimestampEquals
+                //TimestampGreaterThan
+                //TimestampGreaterThanEquals
+                //TimestampLessThan
+                //TimestampLessThanEquals
+            //});
+            // choice.Next
         },
         async Succeed(state, io) {
             return compose(fromOutput, fromInput)(io);

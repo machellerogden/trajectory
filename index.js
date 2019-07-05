@@ -286,10 +286,6 @@ function Handlers(context) {
     };
 }
 
-function findChoice(choices = [], io) {
-    return choices.find(choice => applyRule(choice, io));
-}
-
 function IOCtrl({ getState, getIO, cc }) {
 
     function applyParameters(data) {
@@ -358,6 +354,10 @@ function applyDataToParameters(data, result = {}, key, value, recur) {
         result[key] = recur(value[key]);
     }
     return result;
+}
+
+function findChoice(choices = [], io) {
+    return choices.find(choice => applyRule(choice, io));
 }
 
 const ruleOperations = {

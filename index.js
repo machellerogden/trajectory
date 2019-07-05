@@ -101,7 +101,6 @@ class Trajectory extends EventEmitter {
         };
 
         this.getIO = () => clone(io);
-        this.setIO = v => io = clone(v);
         this.getState = () => state;
 
         const handlers = Handlers(context);
@@ -110,7 +109,7 @@ class Trajectory extends EventEmitter {
             const output = await fn(state, io);
             yield { name, data: output };
             emit({ type: 'Succeed', name, data: output });
-            context.setIO(output); // set data for next loop
+            io = clone(output);
         }
 
         async function* handleError(fn, error) {
@@ -152,7 +151,7 @@ class Trajectory extends EventEmitter {
                 ? set(context.getIO(), catcher.ResultPath, { error: error })
                 : { error };
             yield { name, data: errorOutput };
-            context.setIO(errorOutput);
+            io = clone(errorOutput);
             emit({ type: 'Error', name, data: errorOutput });
             delete state.End;
             state.Next = catcher.Next;
@@ -273,7 +272,13 @@ function Handlers(context) {
         },
         async Choice(state, io) {
             const choice = findChoice(state.Choices, io);
-            // choice.Next
+            const Next = choice == null
+                ? state.Default
+                : choice.Next;
+            if (Next == null) throw new Error(`no where to go`);
+            delete state.End;
+            state.Next = Next;
+            return compose(fromOutput, fromInput)(io);
         },
         async Succeed(state, io) {
             return compose(fromOutput, fromInput)(io);
@@ -282,67 +287,7 @@ function Handlers(context) {
 }
 
 function findChoice(choices = [], io) {
-    return choices.find(choice => {
-                //if (c.And) {
-                //} else if (c.Or) {
-                //} else if (c.Not) {
-                //}
-                //BooleanEquals
-                //NumericEquals
-                //NumericGreaterThan
-                //NumericGreaterThanEquals
-                //NumericLessThan
-                //NumericLessThanEquals
-                //StringEquals
-                //StringGreaterThan
-                //StringGreaterThanEquals
-                //StringLessThan
-                //StringLessThanEquals
-                //TimestampEquals
-                //TimestampGreaterThan
-                //TimestampGreaterThanEquals
-                //TimestampLessThan
-                //TimestampLessThanEquals
-            //});
-    });
-}
-
-// TODO: move type checks to joi schema
-const ruleOperations = {
-    BooleanEquals: (a, b) => [ a, b ].every(v => typeof v === 'boolean') && a === b,
-    NumericEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a === b,
-    NumericGreaterThan: (a, b) => [ a, b ].every(v => typeof v === 'number') && a > b,
-    NumericGreaterThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a >= b,
-    NumericLessThan: (a, b) => [ a, b ].every(v => typeof v === 'number') && a < b,
-    NumericLessThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a <= b,
-    StringEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a === b,
-    StringGreaterThan: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) > 0,
-    StringGreaterThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) >= 0,
-    StringLessThan: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) < 0,
-    StringLessThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) <= 0,
-    TimestampEquals: (a, b) => (new Date(a)).getTime() === (new Date(b)).getTime(),
-    TimestampGreaterThan: (a, b) => new Date(a) > new Date(b),
-    TimestampGreaterThanEquals: (a, b) => new Date(a) >= new Date(b),
-    TimestampLessThan: (a, b) => new Date(a) < new Date(b),
-    TimestampLessThanEquals: (a, b) => new Date(a) <= new Date(b)
-};
-
-function applyOperation(choice, io) {
-    if (choice.Variable) return applyRule(choice, io);
-    // TODO: handle And, Or, Not...
-}
-
-function applyRule(rule, io) {
-    const { value, operation, comparisonValue } = normalizeRule(rule, io);
-    return ruleOperations[r.operation](value, comparisonValue);
-}
-
-function normalizeRule(rule, io) {
-    const { Variable, ...rest } = rule;
-    const value = JSONPath.query(io, Variable);
-    const operation = Object(rest).keys().shift();
-    const comparisonValue = rest[operation];
-    return { value, operation, comparisonValue };
+    return choices.find(choice => applyRule(choice, io));
 }
 
 function IOCtrl({ getState, getIO, cc }) {
@@ -413,6 +358,50 @@ function applyDataToParameters(data, result = {}, key, value, recur) {
         result[key] = recur(value[key]);
     }
     return result;
+}
+
+const ruleOperations = {
+    BooleanEquals: (a, b) => a === b,
+    NumericEquals: (a, b) => a === b,
+    NumericGreaterThan: (a, b) => a > b,
+    NumericGreaterThanEquals: (a, b) => a >= b,
+    NumericLessThan: (a, b) => a < b,
+    NumericLessThanEquals: (a, b) => a <= b,
+    StringEquals: (a, b) => a === b,
+    StringGreaterThan: (a, b) => a.localeCompare(b) > 0,
+    StringGreaterThanEquals: (a, b) => a.localeCompare(b) >= 0,
+    StringLessThan: (a, b) => a.localeCompare(b) < 0,
+    StringLessThanEquals: (a, b) => a.localeCompare(b) <= 0,
+    TimestampEquals: (a, b) => (new Date(a)).getTime() === (new Date(b)).getTime(),
+    TimestampGreaterThan: (a, b) => new Date(a) > new Date(b),
+    TimestampGreaterThanEquals: (a, b) => new Date(a) >= new Date(b),
+    TimestampLessThan: (a, b) => new Date(a) < new Date(b),
+    TimestampLessThanEquals: (a, b) => new Date(a) <= new Date(b),
+    And: a => a.every(v => v === true),
+    Or: a => a.some(v => v === true),
+    Not: a => !a
+};
+
+function applyRule(rule, io) {
+    if (rule.Variable) {
+        return applyComparison(rule, io);
+    } else {
+        const withAppliedComparisons = Object.entries(rule).reduce((acc, [ key, value ]) => {
+            return Array.isArray(value)
+                ? value.map(v => applyRule(v, io))
+                : applyRule(value, io);
+        }, null);
+        const operation = Object.keys(rule).shift();
+        return ruleOperations[operation](withAppliedComparisons);
+    }
+}
+
+function applyComparison(rule, io) {
+    const { Variable, ...rest } = rule;
+    const value = JSONPath.query(io, Variable).shift();
+    const operation = Object.keys(rest).shift();
+    const comparisonValue = rest[operation];
+    return ruleOperations[operation](value, comparisonValue);
 }
 
 module.exports = { Trajectory };

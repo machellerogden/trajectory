@@ -33,7 +33,10 @@ const e = () => ({ e: 'e' });
 const f = () => ({ f: 'f' });
 const g = () => ({ g: 'g' });
 //const g = () => Promise.reject();
-const h = v => v;
+const h = v => {
+    console.log('value at h', v);
+    return v;
+};
 
 const resources = {
     a,
@@ -161,6 +164,32 @@ const t = new Trajectory({ resources });
             h: {
                 Type: 'Task',
                 Resource: 'h',
+                Next: 'i'
+            },
+            i: {
+                Type: 'Choice',
+                Choices: [
+                    {
+                        Variable: '$.1.0.f',
+                        StringEquals: 'f',
+                        Next: 'choice-one'
+                    }
+                ],
+                Default: 'choice-three'
+            },
+            'choice-one': {
+                Type: 'Task',
+                Resource: v => 'excellent choice',
+                End: true
+            },
+            'choice-two': {
+                Type: 'Task',
+                Resource: v => 'poor choice',
+                End: true
+            },
+            'choice-three': {
+                Type: 'Task',
+                Resource: v => "how'd we end up here",
                 End: true
             }
         }

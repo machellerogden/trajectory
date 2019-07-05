@@ -399,5 +399,5 @@ test('should handle parallel executions', async t => {
     const results = await trajectory.execute(definition);
     t.assert(b.calledWith({}));
     t.assert(c.calledWith({}));
-    t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], {} ]);
+    t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], [ [ { b: 'b' } ], [ { c: 'c' } ] ] ]);
 });

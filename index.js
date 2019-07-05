@@ -149,7 +149,7 @@ class Trajectory extends EventEmitter {
             const errorOutput = catcher.ResultPath != null
                 ? set(context.getIO(), catcher.ResultPath, { error: error })
                 : { error };
-            yield errorOutput;
+            yield { name, data: errorOutput };
             context.setIO(errorOutput);
             emit({ type: 'Error', name, data: errorOutput });
             delete state.End;

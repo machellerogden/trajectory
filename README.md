@@ -16,9 +16,9 @@ Trajectory allows you to declare workflows using a data structure that closely m
 - [x] Events
 - [x] Built-In Reporter
 - [x] IO Control Flow
-- [ ] Retry *working but needs refactor*
-- [ ] Catch
-- [ ] Timeout
-- [ ] Choice
-- [ ] Cancel all scheduled work on across all branches on uncaught errors
+- [x] Retry
+- [x] Catch
+- [x] Timeout
+- [x] Choice
+- [x] Cancel all scheduled work on across all branches on uncaught errors
 - [ ] Update state machine specification to reflect latest Joi schema

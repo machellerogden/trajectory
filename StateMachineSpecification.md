@@ -1,19 +1,13 @@
-# Queue Specification
+# State Machine Specification
 
 # Descriptor Syntax
 
 TypeScript is used below to describe the specification. TypeScript is prefered here over something like EBNF in hopes that it will be more approachable. Please note trajectory is not implemented in TypeScript. Typescript appears here solely to act as a descriptor syntax.
 
 ```
-interface QueueDefinition {
-    kind: 'queue';
-    version: string;
-    spec: Queue;
-}
-
-interface Queue {
-    startsAt: string;
-    states: States;
+interface StateMachine {
+    StartsAt: string;
+    States: States;
 }
 
 interface States {
@@ -23,67 +17,66 @@ interface States {
 type State = Pass | Task | Choice | Wait | Succeed | Fail | Parallel;
 
 interface BaseState {
-    next?: string;
-    end?: boolean;
-    inputPath?: string;
-    outputPath?: string;
-    comment?: string;
+    Next?: string;
+    End?: boolean;
+    InputPath?: string;
+    OutputPath?: string;
+    Comment?: string;
 }
 
 interface Pass extends BaseState {
-    type: 'pass';
-    result?: any;
-    resultPath?: string;
-    parameters?: any;
+    Type: 'Pass';
+    Result?: any;
+    ResultPath?: string;
+    Parameters?: any;
 }
 
 interface Task extends BaseState {
-    type: 'task';
-    fn: (io: object) => any;
-    resultPath?: string;
-    parameters?: any;
-    retry?: object[];
-    catch?: object;
-    timeout?: number;
+    Type: 'Task';
+    Resource: string;
+    ResultPath?: string;
+    Parameters?: any;
+    Retry?: object[];
+    Catch?: object;
+    Timeout?: number;
 }
 
 interface Choice extends BaseState {
-    type: 'choice';
-    choices?: object[];
-    default?: string;
+    Type: 'Choice';
+    Choices?: object[];
+    Default?: string;
 }
 
 interface Wait extends BaseState {
-    type: 'wait';
-    seconds?: number;
-    timestamp?: string;
-    secondsPath?: string;
-    timestampPath?: string;
+    Type: 'Wait';
+    Seconds?: number;
+    Timestamp?: string;
+    SecondsPath?: string;
+    TimestampPath?: string;
 }
 
 interface Succeed extends BaseState {
-    type: 'succeed';
+    Type: 'Succeed';
 }
 
 interface Fail extends BaseState {
-    type: 'fail';
-    error?: string;
-    cause?: string;
+    Type: 'Fail';
+    Error?: string;
+    Cause?: string;
 }
 
 interface Parallel extends BaseState {
-    type: 'parallel';
-    branches?: object;
-    resultPath?: string;
-    retry?: object;
-    catch?: object;
+    Type: 'Parallel';
+    Branches?: object;
+    ResultPath?: string;
+    Retry?: object;
+    Catch?: object;
 }
 ```
 
 # Credits
 
-The queue specification as defined herein is a modified version of Amazon State
-Language. Required copyright notice and permission notice follow.
+The state machine specification as defined herein is a slightly modified version of Amazon State Language. Required copyright notice and permission notice follow.
 
 Copyright © 2016 Amazon.com Inc. or Affiliates.
 

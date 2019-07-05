@@ -53,122 +53,118 @@ const t = new Trajectory({ resources });
 
 (async () => {
     const results = await t.execute({
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'parallelA',
-            States: {
-                parallelA: {
-                    Type: 'Parallel',
-                    Branches: [
-                        {
-                            StartAt: 'a',
-                            States: {
-                                a: {
-                                    Type: 'Task',
-                                    Resource: 'a',
-                                    ResultPath: 'a',
-                                    //timeoutSeconds: 0.3,
-                                    End: true
-                                },
-                            }
-                        },
-                        {
-                            StartAt: 'aa',
-                            States: {
-                                aa: {
-                                    Type: 'Task',
-                                    Resource: 'aa',
-                                    ResultPath: 'aa',
-                                    Catch: [
-                                        {
-                                            ErrorEquals: [ 'Error' ],
-                                            ResultPath: 'myerror',
-                                            Next: 'bb'
-                                        }
-                                    ],
-                                    End: true
-                                },
-                                bb: {
-                                    Type: 'Task',
-                                    Resource: 'bb',
-                                    End: true
-                                }
+        StartAt: 'parallelA',
+        States: {
+            parallelA: {
+                Type: 'Parallel',
+                Branches: [
+                    {
+                        StartAt: 'a',
+                        States: {
+                            a: {
+                                Type: 'Task',
+                                Resource: 'a',
+                                ResultPath: 'a',
+                                //timeoutSeconds: 0.3,
+                                End: true
+                            },
+                        }
+                    },
+                    {
+                        StartAt: 'aa',
+                        States: {
+                            aa: {
+                                Type: 'Task',
+                                Resource: 'aa',
+                                ResultPath: 'aa',
+                                Catch: [
+                                    {
+                                        ErrorEquals: [ 'Error' ],
+                                        ResultPath: 'myerror',
+                                        Next: 'bb'
+                                    }
+                                ],
+                                End: true
+                            },
+                            bb: {
+                                Type: 'Task',
+                                Resource: 'bb',
+                                End: true
                             }
                         }
-                    ],
-                    Next: 'b'
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    ResultPath: 'bbb',
-                    Retry: [
-                        {
-                            ErrorEquals: [ 'Error' ],
-                            MaxAttempts: 6,
-                            IntervalSeconds: 0.25,
-                            BackoffRate: 2
-                        }
-                    ],
-                    Next: 'c'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    ResultPath: 'ccc',
-                    Next: 'parallel'
-                },
-                parallel: {
-                    Type: 'Parallel',
-                    //outputPath: '$.1.0',
-                    Branches: [
-                        {
-                            StartAt: 'd',
-                            States: {
-                                d: {
-                                    Type: 'Task',
-                                    Resource: 'd',
-                                    Next: 'e'
-                                },
-                                e: {
-                                    //type: 'fail',
-                                    //error: 'messed up',
-                                    //cause: 'human error'
-                                    Type: 'Task',
-                                    Resource: 'e',
-                                    End: true
-                                }
-                            }
-                        },
-                        {
-                            StartAt: 'f',
-                            States: {
-                                f: {
-                                    Type: 'Task',
-                                    Resource: 'f',
-                                    Next: 'z'
-                                },
-                                z: {
-                                    Type: 'Wait',
-                                    Seconds: 3,
-                                    Next: 'g'
-                                },
-                                g: {
-                                    Type: 'Task',
-                                    Resource: 'g',
-                                    End: true
-                                }
+                    }
+                ],
+                Next: 'b'
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                ResultPath: 'bbb',
+                Retry: [
+                    {
+                        ErrorEquals: [ 'Error' ],
+                        MaxAttempts: 6,
+                        IntervalSeconds: 0.25,
+                        BackoffRate: 2
+                    }
+                ],
+                Next: 'c'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                ResultPath: 'ccc',
+                Next: 'parallel'
+            },
+            parallel: {
+                Type: 'Parallel',
+                //outputPath: '$.1.0',
+                Branches: [
+                    {
+                        StartAt: 'd',
+                        States: {
+                            d: {
+                                Type: 'Task',
+                                Resource: 'd',
+                                Next: 'e'
+                            },
+                            e: {
+                                //type: 'fail',
+                                //error: 'messed up',
+                                //cause: 'human error'
+                                Type: 'Task',
+                                Resource: 'e',
+                                End: true
                             }
                         }
-                    ],
-                    Next: 'h'
-                },
-                h: {
-                    Type: 'Task',
-                    Resource: 'h',
-                    End: true
-                }
+                    },
+                    {
+                        StartAt: 'f',
+                        States: {
+                            f: {
+                                Type: 'Task',
+                                Resource: 'f',
+                                Next: 'z'
+                            },
+                            z: {
+                                Type: 'Wait',
+                                Seconds: 3,
+                                Next: 'g'
+                            },
+                            g: {
+                                Type: 'Task',
+                                Resource: 'g',
+                                End: true
+                            }
+                        }
+                    }
+                ],
+                Next: 'h'
+            },
+            h: {
+                Type: 'Task',
+                Resource: 'h',
+                End: true
             }
         }
     });

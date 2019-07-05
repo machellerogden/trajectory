@@ -16,26 +16,22 @@ test('should execute basic sequential tasks', async t => {
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { a, b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    Next: 'b'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    End: true
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    Next: 'c'
-                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                End: true
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                Next: 'c'
             }
         }
     };
@@ -54,26 +50,22 @@ test('should thread io through states', async t => {
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { a, b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    Next: 'b'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    End: true
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    Next: 'c'
-                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                End: true
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                Next: 'c'
             }
         }
     };
@@ -92,29 +84,25 @@ test('should thread io through states - resultPath', async t => {
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { a, b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    ResultPath: 'apath',
-                    Next: 'b'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    ResultPath: 'cpath',
-                    End: true
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    ResultPath: 'bpath',
-                    Next: 'c'
-                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                ResultPath: 'apath',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                ResultPath: 'cpath',
+                End: true
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                ResultPath: 'bpath',
+                Next: 'c'
             }
         }
     };
@@ -169,31 +157,27 @@ test('should thread io through states - resultPath + inputPath', async t => {
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { a, b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    ResultPath: 'apath',
-                    Next: 'b'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    InputPath: '$.bpath',
-                    ResultPath: 'cpath',
-                    End: true
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    InputPath: '$.apath',
-                    ResultPath: 'bpath',
-                    Next: 'c'
-                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                ResultPath: 'apath',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                InputPath: '$.bpath',
+                ResultPath: 'cpath',
+                End: true
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                InputPath: '$.apath',
+                ResultPath: 'bpath',
+                Next: 'c'
             }
         }
     };
@@ -241,32 +225,28 @@ test('should thread io through states - resultPath + inputPath + outputPath', as
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { a, b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    ResultPath: 'apath',
-                    Next: 'b'
-                },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    InputPath: '$.bpath',
-                    ResultPath: 'cpath',
-                    OutputPath: '$.cpath.c',
-                    End: true
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    InputPath: '$.apath',
-                    ResultPath: 'bpath',
-                    Next: 'c'
-                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                ResultPath: 'apath',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                InputPath: '$.bpath',
+                ResultPath: 'cpath',
+                OutputPath: '$.cpath.c',
+                End: true
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                InputPath: '$.apath',
+                ResultPath: 'bpath',
+                Next: 'c'
             }
         }
     };
@@ -306,41 +286,37 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
     const d = t.context.sandbox.fake.returns({ d: 'd' });
     const resources = { a, b, c, d };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Task',
-                    Resource: 'a',
-                    ResultPath: 'apath',
-                    Next: 'b'
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Task',
+                Resource: 'a',
+                ResultPath: 'apath',
+                Next: 'b'
+            },
+            c: {
+                Type: 'Task',
+                Resource: 'c',
+                InputPath: '$.bpath',
+                ResultPath: 'cpath',
+                OutputPath: '$.cpath',
+                Next: 'd'
+            },
+            b: {
+                Type: 'Task',
+                Resource: 'b',
+                InputPath: '$.apath',
+                ResultPath: 'bpath',
+                Next: 'c'
+            },
+            d: {
+                Type: 'Task',
+                Resource: 'd',
+                Parameters: {
+                    'renamedC.$': '$.c'
                 },
-                c: {
-                    Type: 'Task',
-                    Resource: 'c',
-                    InputPath: '$.bpath',
-                    ResultPath: 'cpath',
-                    OutputPath: '$.cpath',
-                    Next: 'd'
-                },
-                b: {
-                    Type: 'Task',
-                    Resource: 'b',
-                    InputPath: '$.apath',
-                    ResultPath: 'bpath',
-                    Next: 'c'
-                },
-                d: {
-                    Type: 'Task',
-                    Resource: 'd',
-                    Parameters: {
-                        'renamedC.$': '$.c'
-                    },
-                    //resultPath: 'dpath',
-                    End: true
-                }
+                //resultPath: 'dpath',
+                End: true
             }
         }
     };
@@ -386,40 +362,36 @@ test('should handle parallel executions', async t => {
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { b, c };
     const definition = {
-        Kind: 'StateMachine',
-        Version: '1.0.0',
-        Spec: {
-            StartAt: 'a',
-            States: {
-                a: {
-                    Type: 'Parallel',
-                    Branches: [
-                        {
-                            StartAt: 'b',
-                            States: {
-                                b: {
-                                    Type: 'Task',
-                                    Resource: 'b',
-                                    End: true
-                                }
-                            }
-                        },
-                        {
-                            StartAt: 'c',
-                            States: {
-                                c: {
-                                    Type: 'Task',
-                                    Resource: 'c',
-                                    End: true
-                                }
+        StartAt: 'a',
+        States: {
+            a: {
+                Type: 'Parallel',
+                Branches: [
+                    {
+                        StartAt: 'b',
+                        States: {
+                            b: {
+                                Type: 'Task',
+                                Resource: 'b',
+                                End: true
                             }
                         }
-                    ],
-                    Next: 'd'
-                },
-                d: {
-                    Type: 'Succeed'
-                }
+                    },
+                    {
+                        StartAt: 'c',
+                        States: {
+                            c: {
+                                Type: 'Task',
+                                Resource: 'c',
+                                End: true
+                            }
+                        }
+                    }
+                ],
+                Next: 'd'
+            },
+            d: {
+                Type: 'Succeed'
             }
         }
     };

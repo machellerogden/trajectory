@@ -8,7 +8,7 @@ const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 const ordinal = require('ordinal');
 const CancellationContext = require('cancellation-context');
-const { definitionSchema, optionsSchema, inputSchema } = require('./lib/schema');
+const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep, reduceAny } = require('./lib/util');
 const builtInReporter = require('./lib/reporter');
 
@@ -57,8 +57,8 @@ class Trajectory extends EventEmitter {
         });
     }
 
-    async execute(definition, rawInput = {}) {
-        const { Spec:stateMachine } = await definitionSchema.validate(definition);
+    async execute(stateMachineDefinition, rawInput = {}) {
+        const stateMachine = await stateMachineSchema.validate(stateMachineDefinition);
         const input = await inputSchema.validate(rawInput);
         let results;
         try {

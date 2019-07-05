@@ -128,6 +128,8 @@ class Trajectory extends EventEmitter {
                     if (catcher) {
                         yield* await catchError(catcher, fn, retryError);
                     } else {
+                        yield { name, data: retryError };
+                        emit({ type: 'Error', name, data: retryError });
                         throw retryError;
                     }
                 }
@@ -233,8 +235,6 @@ function* abort(name, state, emit) {
     throw new Error(errMsg.join(': '));
 }
 
-module.exports = { Trajectory };
-
 function Handlers(context) {
 
     const {
@@ -272,8 +272,17 @@ function Handlers(context) {
             return processOutput(output);
         },
         async Choice(state, io) {
-            // TODO
-            //const choice = (state.Choices || []).find(c => {
+            const choice = findChoice(state.Choices, io);
+            // choice.Next
+        },
+        async Succeed(state, io) {
+            return compose(fromOutput, fromInput)(io);
+        }
+    };
+}
+
+function findChoice(choices = [], io) {
+    return choices.find(choice => {
                 //if (c.And) {
                 //} else if (c.Or) {
                 //} else if (c.Not) {
@@ -295,12 +304,45 @@ function Handlers(context) {
                 //TimestampLessThan
                 //TimestampLessThanEquals
             //});
-            // choice.Next
-        },
-        async Succeed(state, io) {
-            return compose(fromOutput, fromInput)(io);
-        }
-    };
+    });
+}
+
+// TODO: move type checks to joi schema
+const ruleOperations = {
+    BooleanEquals: (a, b) => [ a, b ].every(v => typeof v === 'boolean') && a === b,
+    NumericEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a === b,
+    NumericGreaterThan: (a, b) => [ a, b ].every(v => typeof v === 'number') && a > b,
+    NumericGreaterThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a >= b,
+    NumericLessThan: (a, b) => [ a, b ].every(v => typeof v === 'number') && a < b,
+    NumericLessThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'number') && a <= b,
+    StringEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a === b,
+    StringGreaterThan: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) > 0,
+    StringGreaterThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) >= 0,
+    StringLessThan: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) < 0,
+    StringLessThanEquals: (a, b) => [ a, b ].every(v => typeof v === 'string') && a.localeCompare(b) <= 0,
+    TimestampEquals: (a, b) => (new Date(a)).getTime() === (new Date(b)).getTime(),
+    TimestampGreaterThan: (a, b) => new Date(a) > new Date(b),
+    TimestampGreaterThanEquals: (a, b) => new Date(a) >= new Date(b),
+    TimestampLessThan: (a, b) => new Date(a) < new Date(b),
+    TimestampLessThanEquals: (a, b) => new Date(a) <= new Date(b)
+};
+
+function applyOperation(choice, io) {
+    if (choice.Variable) return applyRule(choice, io);
+    // TODO: handle And, Or, Not...
+}
+
+function applyRule(rule, io) {
+    const { value, operation, comparisonValue } = normalizeRule(rule, io);
+    return ruleOperations[r.operation](value, comparisonValue);
+}
+
+function normalizeRule(rule, io) {
+    const { Variable, ...rest } = rule;
+    const value = JSONPath.query(io, Variable);
+    const operation = Object(rest).keys().shift();
+    const comparisonValue = rest[operation];
+    return { value, operation, comparisonValue };
 }
 
 function IOCtrl({ getState, getIO, cc }) {
@@ -372,3 +414,5 @@ function applyDataToParameters(data, result = {}, key, value, recur) {
     }
     return result;
 }
+
+module.exports = { Trajectory };

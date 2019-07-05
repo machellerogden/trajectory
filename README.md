@@ -18,6 +18,7 @@ Trajectory allows you to declare workflows using a data structure that closely m
 - [x] IO Control Flow
 - [x] Retry
 - [x] Catch
+- [ ] Error enums
 - [x] Timeout
 - [x] Choice
 - [x] Cancel all scheduled work on across all branches on uncaught errors

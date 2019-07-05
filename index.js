@@ -7,14 +7,13 @@ const compose = require('lodash/fp/compose');
 const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 const ordinal = require('ordinal');
-
 const CancellationContext = require('cancellation-context');
-
 const { definitionSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep, reduceAny } = require('./lib/util');
-const { isEnd, applyDataToParameters } = require('./lib/helpers');
-
 const builtInReporter = require('./lib/reporter');
+
+const endStates = new Set([ 'Succeed', 'Fail']);
+const isEnd = state => state.End || endStates.has(state.Type);
 
 class Trajectory extends EventEmitter {
 
@@ -30,10 +29,13 @@ class Trajectory extends EventEmitter {
             debug = false,
             silent = false,
             reporter = builtInReporter,
-            reporterOptions = {}
+            reporterOptions = {},
+            resources = {}
         } = options;
 
         super();
+
+        this.resources = resources;
 
         this.cc = CancellationContext();
 
@@ -46,7 +48,7 @@ class Trajectory extends EventEmitter {
     }
 
     reportHandler({ type, name, data, message }) {
-        this.reporter[type]({
+        this.reporter[type.toLowerCase()]({
             name,
             data,
             message,
@@ -56,11 +58,11 @@ class Trajectory extends EventEmitter {
     }
 
     async execute(definition, rawInput = {}) {
-        const { spec:queue } = await definitionSchema.validate(definition);
+        const { Spec:stateMachine } = await definitionSchema.validate(definition);
         const input = await inputSchema.validate(rawInput);
         let results;
         try {
-            results = await this.executeQueue(queue, input);
+            results = await this.executeStateMachine(stateMachine, input);
             this.emit('event', { type: 'complete', name: 'completed', data: results })
             return [ input, ...results ];
         } catch (e) {
@@ -70,32 +72,32 @@ class Trajectory extends EventEmitter {
         }
     }
 
-    async executeQueue(queue, input) {
+    async executeStateMachine(stateMachine, input) {
         const results = [];
-        const scheduleIterator = this.schedule(queue, clone(input));
+        const scheduleIterator = this.schedule(stateMachine, clone(input));
         for await (const result of scheduleIterator) {
             results.push(result.data);
         }
         return results;
     }
 
-    async* schedule(queue, io) {
-        const { startAt, states } = queue;
+    async* schedule(stateMachine, io) {
+        const { StartAt, States } = stateMachine;
 
-        if (states == null || states[startAt] == null) {
-            throw new Error(`Unable to resolve state "${startAt}".`);
+        if (States == null || States[StartAt] == null) {
+            throw new Error(`Unable to resolve state "${StartAt}".`);
         }
 
         const context = this;
 
         const emit = event => this.emit('event', event);
 
-        let name = startAt;
-        let state = states[startAt];
+        let name = StartAt;
+        let state = States[StartAt];
 
         const next = () => {
-            name = state.next;
-            state = states[state.next];
+            name = state.Next;
+            state = States[state.Next];
         };
 
         this.getIO = () => clone(io);
@@ -107,7 +109,7 @@ class Trajectory extends EventEmitter {
         async function* unsafeAttempt(fn) {
             const output = await fn(state, io);
             yield { name, data: output };
-            emit({ type: 'succeed', name, data: output });
+            emit({ type: 'Succeed', name, data: output });
             context.setIO(output); // set data for next loop
         }
 
@@ -117,8 +119,8 @@ class Trajectory extends EventEmitter {
                 name,
                 message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
             });
-            const retrier = (state.retry || []).find(r => r.errorEquals.includes(error.name));
-            const catcher = (state.catch || []).find(c => c.errorEquals.includes(error.name));
+            const retrier = (state.Retry || []).find(r => r.ErrorEquals.includes(error.name));
+            const catcher = (state.Catch || []).find(c => c.ErrorEquals.includes(error.name));
             if (retrier) {
                 try {
                     yield* await retry(retrier, fn, error);
@@ -145,11 +147,11 @@ class Trajectory extends EventEmitter {
                 message: `Catching error in "${name}"`
             });
             const errorOutput = { error: error };
-            yield catcher.resultPath != null
-                ? set(context.getIO(), catcher.resultPath, errorOutput)
+            yield catcher.ResultPath != null
+                ? set(context.getIO(), catcher.ResultPath, errorOutput)
                 : errorOutput;
-            delete state.end;
-            state.next = catcher.next;
+            delete state.End;
+            state.Next = catcher.Next;
         }
 
         async function* retry(retrier, fn, error) {
@@ -160,16 +162,16 @@ class Trajectory extends EventEmitter {
                 message: `Retrying "${name}" after error`
             });
             let {
-                intervalSeconds = 0,
-                backoffRate = 1,
-                maxAttempts = 1
+                IntervalSeconds = 0,
+                BackoffRate = 1,
+                MaxAttempts = 1
             } = retrier;
             let i = 0;
-            while (i++ < maxAttempts) {
+            while (i++ < MaxAttempts) {
                 try {
                     yield* await unsafeAttempt(fn);
                     cleared = true;
-                    let message = `Retry of ${state.type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                    let message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
                     emit({
                         type: 'info',
                         name,
@@ -177,16 +179,16 @@ class Trajectory extends EventEmitter {
                     });
                     break;
                 } catch (e) {
-                    let message = `Retry of ${state.type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${maxAttempts}.`;
-                    if (intervalSeconds > 0 && i < maxAttempts) message += `\nWill try again in ${intervalSeconds * backoffRate} seconds.`;
+                    let message = `Retry of ${state.Type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${MaxAttempts}.`;
+                    if (IntervalSeconds > 0 && i < MaxAttempts) message += `\nWill try again in ${IntervalSeconds * BackoffRate} seconds.`;
                     emit({
                         type: 'info',
                         name,
                         message
                     });
-                    if (intervalSeconds) {
-                        await sleep(intervalSeconds);
-                        intervalSeconds *= backoffRate;
+                    if (IntervalSeconds) {
+                        await sleep(IntervalSeconds);
+                        IntervalSeconds *= BackoffRate;
                     }
                 }
             }
@@ -198,7 +200,6 @@ class Trajectory extends EventEmitter {
         }
 
         async function* attempt(fn) {
-            if (state.type === 'fail') return yield* await fn(state, io);
             try {
                 yield* await unsafeAttempt(fn);
             } catch (error) {
@@ -209,9 +210,9 @@ class Trajectory extends EventEmitter {
         while (true) {
             emit({ type: 'start', name });
 
-            yield* state.type === 'fail'
+            yield* state.Type === 'Fail'
                 ? abort(name, state, emit)
-                : attempt(handlers[state.type]);
+                : attempt(handlers[state.Type]);
             if (isEnd(state)) return;
 
             next();
@@ -220,7 +221,7 @@ class Trajectory extends EventEmitter {
 }
 
 function* abort(name, state, emit) {
-    const { type, error, cause } = state;
+    const { Type, Error:error, Cause:cause } = state;
     const data = { name, error, cause };
     const errMsg = [];
     if (error) errMsg.push(error);
@@ -246,29 +247,30 @@ function Handlers(context) {
     } = IOCtrl(context);
 
     return {
-        async task(state, io) {
-            const cancellableFn = state.timeoutSeconds == null
-                ? io => context.cc.Cancellable(onCancel => state.fn(io, onCancel))
-                : io => context.cc.Perishable(onCancel => state.fn(io, onCancel), state.timeoutSeconds * 1000);
+        async Task(state, io) {
+            const fn = context.resources[state.Resource];
+            const cancellableFn = state.TimeoutSeconds == null
+                ? io => context.cc.Cancellable(onCancel => fn(io, onCancel))
+                : io => context.cc.Perishable(onCancel => fn(io, onCancel), state.TimeoutSeconds * 1000);
             return compose(processOutput, cancellableFn, processInput)(io);
         },
-        async pass(state, io) {
+        async Pass(state, io) {
             return processIO(io);
         },
-        async wait(state, io) {
+        async Wait(state, io) {
             return compose(fromOutput, delayOutput, fromInput)(io);
         },
-        async parallel(state, io) {
+        async Parallel(state, io) {
             context.depth++;
             const input = fromInput(io);
-            const output = await Promise.all(state.branches.map(branch => context.executeQueue(branch, input)));
+            const output = await Promise.all(state.Branches.map(branch => context.executeStateMachine(branch, input)));
             context.depth--;
             return processOutput(output);
         },
-        async choice(state, io) {
+        async Choice(state, io) {
             // TODO
         },
-        async succeed(state, io) {
+        async Succeed(state, io) {
             return compose(fromOutput, fromInput)(io);
         }
     };
@@ -278,41 +280,41 @@ function IOCtrl({ getState, getIO, cc }) {
 
     function applyParameters(data) {
         const state = getState();
-        if (state.parameters == null) return data;
+        if (state.Parameters == null) return data;
         const recur = value =>
             reduceAny(value, (result, v, k) =>
                 applyDataToParameters(data, result, k, v, recur));
-        return recur(state.parameters);
+        return recur(state.Parameters);
     }
 
     function fromInput(data) {
         const state = getState();
-        if (state.inputPath == null) return data;
-        return JSONPath.query(data, state.inputPath).shift();
+        if (state.InputPath == null) return data;
+        return JSONPath.query(data, state.InputPath).shift();
     }
 
     async function fromOutput(data) {
         const state = getState();
-        if (state.outputPath == null) return data;
-        return JSONPath.query(await data, state.outputPath).shift();
+        if (state.OutputPath == null) return data;
+        return JSONPath.query(await data, state.OutputPath).shift();
     }
 
     async function toResult(value) {
         const state = getState();
-        if (state.result) return state.result;
-        if (state.resultPath == null) return await value;
-        return set(getIO(), state.resultPath, await value);
+        if (state.Result) return state.Result;
+        if (state.ResultPath == null) return await value;
+        return set(getIO(), state.ResultPath, await value);
     }
 
     async function delayOutput(data) {
         const state = getState();
-        const seconds = (state.seconds != null)
-            ? state.seconds
-            : (state.secondsPath != null)
-                ? JSONPath.query(data, state.secondsPath)
+        const seconds = (state.Seconds != null)
+            ? state.Seconds
+            : (state.SecondsPath != null)
+                ? JSONPath.query(data, state.SecondsPath)
                 : null;
         if (typeof seconds !== 'number') {
-            const msg = `secondsPath on state "${name}" resolves to "${seconds}". Must be a number.`; 
+            const msg = `SecondsPath on state "${name}" resolves to "${seconds}". Must be a number.`; 
             throw new Error(msg);
         }
         await cc.CancellableTimeout(seconds * 1000);
@@ -335,3 +337,11 @@ function IOCtrl({ getState, getIO, cc }) {
     };
 }
 
+function applyDataToParameters(data, result = {}, key, value, recur) {
+    if (key.endsWith('.$')) {
+        result[key.slice(0, -2)] = JSONPath.query(data, value).shift();
+    } else {
+        result[key] = recur(value[key]);
+    }
+    return result;
+}

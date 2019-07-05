@@ -1,5 +1,5 @@
 const { Trajectory } = require('.');
-const t = new Trajectory();
+
 
 const a = async (input, onCancel) => new Promise((resolve, reject) => {
     const handle = setTimeout(() => resolve({ a: 'a' }), 1000);
@@ -26,6 +26,7 @@ const b = () => {
         return { b: 'b' };
     }
 };
+const bb =  v => ({ recovered: v});
 
 const c = () => ({ c: 'c' });
 const d = () => ({ d: 'd' });
@@ -35,123 +36,138 @@ const g = () => ({ g: 'g' });
 //const g = () => Promise.reject();
 const h = v => v;
 
+const resources = {
+    a,
+    aa,
+    b,
+    bb,
+    c,
+    d,
+    e,
+    f,
+    g,
+    h
+};
+
+const t = new Trajectory({ resources });
+
 (async () => {
     const results = await t.execute({
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'parallelA',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'parallelA',
+            States: {
                 parallelA: {
-                    type: 'parallel',
-                    branches: [
+                    Type: 'Parallel',
+                    Branches: [
                         {
-                            startAt: 'a',
-                            states: {
+                            StartAt: 'a',
+                            States: {
                                 a: {
-                                    type: 'task',
-                                    fn: a,
-                                    resultPath: 'a',
+                                    Type: 'Task',
+                                    Resource: 'a',
+                                    ResultPath: 'a',
                                     //timeoutSeconds: 0.3,
-                                    end: true
+                                    End: true
                                 },
                             }
                         },
                         {
-                            startAt: 'aa',
-                            states: {
+                            StartAt: 'aa',
+                            States: {
                                 aa: {
-                                    type: 'task',
-                                    fn: aa,
-                                    resultPath: 'aa',
-                                    catch: [
+                                    Type: 'Task',
+                                    Resource: 'aa',
+                                    ResultPath: 'aa',
+                                    Catch: [
                                         {
-                                            errorEquals: [ 'Error' ],
-                                            resultPath: 'myerror',
-                                            next: 'bb'
+                                            ErrorEquals: [ 'Error' ],
+                                            ResultPath: 'myerror',
+                                            Next: 'bb'
                                         }
                                     ],
-                                    end: true
+                                    End: true
                                 },
                                 bb: {
-                                    type: 'task',
-                                    fn: v => ({ recovered: v}),
-                                    end: true
+                                    Type: 'Task',
+                                    Resource: 'bb',
+                                    End: true
                                 }
                             }
                         }
                     ],
-                    next: 'b'
+                    Next: 'b'
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    resultPath: 'bbb',
-                    retry: [
+                    Type: 'Task',
+                    Resource: 'b',
+                    ResultPath: 'bbb',
+                    Retry: [
                         {
-                            errorEquals: [ 'Error' ],
-                            maxAttempts: 6,
-                            intervalSeconds: 0.25,
-                            backoffRate: 2
+                            ErrorEquals: [ 'Error' ],
+                            MaxAttempts: 6,
+                            IntervalSeconds: 0.25,
+                            BackoffRate: 2
                         }
                     ],
-                    next: 'c'
+                    Next: 'c'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    resultPath: 'ccc',
-                    next: 'parallel'
+                    Type: 'Task',
+                    Resource: 'c',
+                    ResultPath: 'ccc',
+                    Next: 'parallel'
                 },
                 parallel: {
-                    type: 'parallel',
+                    Type: 'Parallel',
                     //outputPath: '$.1.0',
-                    branches: [
+                    Branches: [
                         {
-                            startAt: 'd',
-                            states: {
+                            StartAt: 'd',
+                            States: {
                                 d: {
-                                    type: 'task',
-                                    fn: d,
-                                    next: 'e'
+                                    Type: 'Task',
+                                    Resource: 'd',
+                                    Next: 'e'
                                 },
                                 e: {
                                     //type: 'fail',
                                     //error: 'messed up',
                                     //cause: 'human error'
-                                    type: 'task',
-                                    fn: e,
-                                    end: true
+                                    Type: 'Task',
+                                    Resource: 'e',
+                                    End: true
                                 }
                             }
                         },
                         {
-                            startAt: 'f',
-                            states: {
+                            StartAt: 'f',
+                            States: {
                                 f: {
-                                    type: 'task',
-                                    fn: f,
-                                    next: 'z'
+                                    Type: 'Task',
+                                    Resource: 'f',
+                                    Next: 'z'
                                 },
                                 z: {
-                                    type: 'wait',
-                                    seconds: 3,
-                                    next: 'g'
+                                    Type: 'Wait',
+                                    Seconds: 3,
+                                    Next: 'g'
                                 },
                                 g: {
-                                    type: 'task',
-                                    fn: g,
-                                    end: true
+                                    Type: 'Task',
+                                    Resource: 'g',
+                                    End: true
                                 }
                             }
                         }
                     ],
-                    next: 'h'
+                    Next: 'h'
                 },
                 h: {
-                    type: 'task',
-                    fn: h,
-                    end: true
+                    Type: 'Task',
+                    Resource: 'h',
+                    End: true
                 }
             }
         }

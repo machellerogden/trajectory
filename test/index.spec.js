@@ -14,31 +14,32 @@ test('should execute basic sequential tasks', async t => {
     const a = t.context.sandbox.fake.returns({ a: 'a' });
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { a, b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    end: true
+                    Type: 'Task',
+                    Resource: 'c',
+                    End: true
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    Next: 'c'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledOnce);
     t.assert(b.calledOnce);
@@ -51,31 +52,32 @@ test('should thread io through states', async t => {
     const a = t.context.sandbox.fake.returns({ a: 'a' });
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { a, b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    end: true
+                    Type: 'Task',
+                    Resource: 'c',
+                    End: true
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    Next: 'c'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledWith({}));
     t.assert(b.calledWith({ a: 'a' }));
@@ -88,34 +90,35 @@ test('should thread io through states - resultPath', async t => {
     const a = t.context.sandbox.fake.returns({ a: 'a' });
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { a, b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    resultPath: 'apath',
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    ResultPath: 'apath',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    resultPath: 'cpath',
-                    end: true
+                    Type: 'Task',
+                    Resource: 'c',
+                    ResultPath: 'cpath',
+                    End: true
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    resultPath: 'bpath',
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    ResultPath: 'bpath',
+                    Next: 'c'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledWith({}));
     t.assert(b.calledWith({
@@ -164,36 +167,37 @@ test('should thread io through states - resultPath + inputPath', async t => {
     const a = t.context.sandbox.fake.returns({ a: 'a' });
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { a, b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    resultPath: 'apath',
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    ResultPath: 'apath',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    inputPath: '$.bpath',
-                    resultPath: 'cpath',
-                    end: true
+                    Type: 'Task',
+                    Resource: 'c',
+                    InputPath: '$.bpath',
+                    ResultPath: 'cpath',
+                    End: true
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    inputPath: '$.apath',
-                    resultPath: 'bpath',
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    InputPath: '$.apath',
+                    ResultPath: 'bpath',
+                    Next: 'c'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledWith({}));
     t.assert(b.calledWith({
@@ -235,37 +239,38 @@ test('should thread io through states - resultPath + inputPath + outputPath', as
     const a = t.context.sandbox.fake.returns({ a: 'a' });
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { a, b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    resultPath: 'apath',
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    ResultPath: 'apath',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    inputPath: '$.bpath',
-                    resultPath: 'cpath',
-                    outputPath: '$.cpath.c',
-                    end: true
+                    Type: 'Task',
+                    Resource: 'c',
+                    InputPath: '$.bpath',
+                    ResultPath: 'cpath',
+                    OutputPath: '$.cpath.c',
+                    End: true
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    inputPath: '$.apath',
-                    resultPath: 'bpath',
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    InputPath: '$.apath',
+                    ResultPath: 'bpath',
+                    Next: 'c'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledWith({}));
     t.assert(b.calledWith({
@@ -299,46 +304,47 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const d = t.context.sandbox.fake.returns({ d: 'd' });
+    const resources = { a, b, c, d };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'task',
-                    fn: a,
-                    resultPath: 'apath',
-                    next: 'b'
+                    Type: 'Task',
+                    Resource: 'a',
+                    ResultPath: 'apath',
+                    Next: 'b'
                 },
                 c: {
-                    type: 'task',
-                    fn: c,
-                    inputPath: '$.bpath',
-                    resultPath: 'cpath',
-                    outputPath: '$.cpath',
-                    next: 'd'
+                    Type: 'Task',
+                    Resource: 'c',
+                    InputPath: '$.bpath',
+                    ResultPath: 'cpath',
+                    OutputPath: '$.cpath',
+                    Next: 'd'
                 },
                 b: {
-                    type: 'task',
-                    fn: b,
-                    inputPath: '$.apath',
-                    resultPath: 'bpath',
-                    next: 'c'
+                    Type: 'Task',
+                    Resource: 'b',
+                    InputPath: '$.apath',
+                    ResultPath: 'bpath',
+                    Next: 'c'
                 },
                 d: {
-                    type: 'task',
-                    fn: d,
-                    parameters: {
+                    Type: 'Task',
+                    Resource: 'd',
+                    Parameters: {
                         'renamedC.$': '$.c'
                     },
                     //resultPath: 'dpath',
-                    end: true
+                    End: true
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(a.calledWith({}));
     t.assert(b.calledWith({
@@ -378,45 +384,46 @@ test('should handle parallel executions', async t => {
     t.plan(3);
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
+    const resources = { b, c };
     const definition = {
-        kind: 'queue',
-        version: '1.0.0',
-        spec: {
-            startAt: 'a',
-            states: {
+        Kind: 'StateMachine',
+        Version: '1.0.0',
+        Spec: {
+            StartAt: 'a',
+            States: {
                 a: {
-                    type: 'parallel',
-                    branches: [
+                    Type: 'Parallel',
+                    Branches: [
                         {
-                            startAt: 'b',
-                            states: {
+                            StartAt: 'b',
+                            States: {
                                 b: {
-                                    type: 'task',
-                                    fn: b,
-                                    end: true
+                                    Type: 'Task',
+                                    Resource: 'b',
+                                    End: true
                                 }
                             }
                         },
                         {
-                            startAt: 'c',
-                            states: {
+                            StartAt: 'c',
+                            States: {
                                 c: {
-                                    type: 'task',
-                                    fn: c,
-                                    end: true
+                                    Type: 'Task',
+                                    Resource: 'c',
+                                    End: true
                                 }
                             }
                         }
                     ],
-                    next: 'd'
+                    Next: 'd'
                 },
                 d: {
-                    type: 'succeed'
+                    Type: 'Succeed'
                 }
             }
         }
     };
-    const trajectory = new Trajectory(testOptions);
+    const trajectory = new Trajectory({ ...testOptions, resources });
     const results = await trajectory.execute(definition);
     t.assert(b.calledWith({}));
     t.assert(c.calledWith({}));

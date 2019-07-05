@@ -26,7 +26,6 @@ const b = () => {
         return { b: 'b' };
     }
 };
-const bb =  v => ({ recovered: v});
 
 const c = () => ({ c: 'c' });
 const d = () => ({ d: 'd' });
@@ -38,9 +37,7 @@ const h = v => v;
 
 const resources = {
     a,
-    aa,
     b,
-    bb,
     c,
     d,
     e,
@@ -75,7 +72,7 @@ const t = new Trajectory({ resources });
                         States: {
                             aa: {
                                 Type: 'Task',
-                                Resource: 'aa',
+                                Resource: aa,
                                 ResultPath: 'aa',
                                 Catch: [
                                     {
@@ -88,7 +85,7 @@ const t = new Trajectory({ resources });
                             },
                             bb: {
                                 Type: 'Task',
-                                Resource: 'bb',
+                                Resource: v => ({ recovered: v}),
                                 End: true
                             }
                         }

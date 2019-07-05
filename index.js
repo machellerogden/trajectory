@@ -63,7 +63,7 @@ class Trajectory extends EventEmitter {
         let results;
         try {
             results = await this.executeStateMachine(stateMachine, input);
-            this.emit('event', { type: 'complete', name: 'completed', data: results })
+            this.emit('event', { type: 'Complete', name: 'completed', data: results })
             return [ input, ...results ];
         } catch (e) {
             const { stack } = serializeError(e);
@@ -115,7 +115,7 @@ class Trajectory extends EventEmitter {
 
         async function* handleError(fn, error) {
             emit({
-                type: 'info',
+                type: 'Info',
                 name,
                 message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
             });
@@ -135,21 +135,23 @@ class Trajectory extends EventEmitter {
                 yield* await catchError(catcher, fn, error);
             } else {
                 yield { name, data: error };
-                emit({ type: 'error', name, data: error });
+                emit({ type: 'Error', name, data: error });
                 throw error;
             }
         }
 
         async function* catchError(catcher, fn, error) {
             emit({
-                type: 'info',
+                type: 'Info',
                 name,
                 message: `Catching error in "${name}"`
             });
-            const errorOutput = { error: error };
-            yield catcher.ResultPath != null
-                ? set(context.getIO(), catcher.ResultPath, errorOutput)
-                : errorOutput;
+            const errorOutput = catcher.ResultPath != null
+                ? set(context.getIO(), catcher.ResultPath, { error: error })
+                : { error };
+            yield errorOutput;
+            context.setIO(errorOutput);
+            emit({ type: 'Error', name, data: errorOutput });
             delete state.End;
             state.Next = catcher.Next;
         }
@@ -157,7 +159,7 @@ class Trajectory extends EventEmitter {
         async function* retry(retrier, fn, error) {
             let cleared = false;
             emit({
-                type: 'info',
+                type: 'Info',
                 name,
                 message: `Retrying "${name}" after error`
             });
@@ -173,7 +175,7 @@ class Trajectory extends EventEmitter {
                     cleared = true;
                     let message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
                     emit({
-                        type: 'info',
+                        type: 'Info',
                         name,
                         message
                     });
@@ -182,7 +184,7 @@ class Trajectory extends EventEmitter {
                     let message = `Retry of ${state.Type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${MaxAttempts}.`;
                     if (IntervalSeconds > 0 && i < MaxAttempts) message += `\nWill try again in ${IntervalSeconds * BackoffRate} seconds.`;
                     emit({
-                        type: 'info',
+                        type: 'Info',
                         name,
                         message
                     });
@@ -194,7 +196,7 @@ class Trajectory extends EventEmitter {
             }
             if (!cleared) {
                 yield { name, data: error };
-                emit({ type: 'error', name, data: error });
+                emit({ type: 'Error', name, data: error });
                 throw error;
             }
         }
@@ -208,7 +210,7 @@ class Trajectory extends EventEmitter {
         }
 
         while (true) {
-            emit({ type: 'start', name });
+            emit({ type: 'Start', name });
 
             yield* state.Type === 'Fail'
                 ? abort(name, state, emit)
@@ -248,7 +250,9 @@ function Handlers(context) {
 
     return {
         async Task(state, io) {
-            const fn = context.resources[state.Resource];
+            const fn = typeof state.Resource === 'function'
+                ? state.Resource
+                : context.resources[state.Resource];
             const cancellableFn = state.TimeoutSeconds == null
                 ? io => context.cc.Cancellable(onCancel => fn(io, onCancel))
                 : io => context.cc.Perishable(onCancel => fn(io, onCancel), state.TimeoutSeconds * 1000);

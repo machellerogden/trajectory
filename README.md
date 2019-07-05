@@ -21,4 +21,4 @@ Trajectory allows you to declare workflows using a data structure that closely m
 - [ ] Timeout
 - [ ] Choice
 - [ ] Cancel all scheduled work on across all branches on uncaught errors
-- [ ] Update queue specification to reflect latest Joi schema
+- [ ] Update state machine specification to reflect latest Joi schema

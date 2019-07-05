@@ -148,7 +148,7 @@ class Trajectory extends EventEmitter {
                 message: `Catching error in "${name}"`
             });
             const errorOutput = catcher.ResultPath != null
-                ? set(context.getIO(), catcher.ResultPath, { error: error })
+                ? set(clone(io), catcher.ResultPath, { error: error })
                 : { error };
             yield { name, data: errorOutput };
             io = clone(errorOutput);

@@ -1,6 +1,5 @@
 const { Trajectory } = require('.');
 
-
 const a = async (input, onCancel) => new Promise((resolve, reject) => {
     const handle = setTimeout(() => resolve({ a: 'a' }), 1000);
     onCancel(reason => {
@@ -33,10 +32,7 @@ const e = () => ({ e: 'e' });
 const f = () => ({ f: 'f' });
 const g = () => ({ g: 'g' });
 //const g = () => Promise.reject();
-const h = v => {
-    console.log('value at h', v);
-    return v;
-};
+const h = v => v;
 
 const resources = {
     a,

@@ -8,6 +8,7 @@ const { clone } = require('mediary');
 const serializeError = require('serialize-error');
 const ordinal = require('ordinal');
 const CancellationContext = require('cancellation-context');
+
 const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep, reduceAny } = require('./lib/util');
 const builtInReporter = require('./lib/reporter');
@@ -29,7 +30,6 @@ class Trajectory extends EventEmitter {
             debug = false,
             silent = false,
             reporter = builtInReporter,
-            reporterOptions = {},
             resources = {}
         } = options;
 
@@ -41,7 +41,6 @@ class Trajectory extends EventEmitter {
 
         this.reporter = reporter;
         this.depth = 0;
-        this.reporterOptions = reporterOptions;
 
         this.silent = silent;
         if (!silent) this.on('event', this.reportHandler);
@@ -52,8 +51,7 @@ class Trajectory extends EventEmitter {
             name,
             data,
             message,
-            depth: this.depth,
-            options: this.reporterOptions
+            depth: this.depth
         });
     }
 
@@ -76,6 +74,7 @@ class Trajectory extends EventEmitter {
         const results = [];
         const scheduleIterator = this.schedule(stateMachine, clone(input));
         for await (const result of scheduleIterator) {
+            await inputSchema.validate(result.data);
             results.push(result.data);
         }
         return results;

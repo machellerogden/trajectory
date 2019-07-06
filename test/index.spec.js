@@ -479,11 +479,10 @@ test('choices branch test - 2', async t => {
     t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from default' } ]);
 });
 
-test('choices rule tests', async t => {
+test('choices rule tests - 1', async t => {
     async function run(operation, input, value) {
         const someChosenState = t.context.sandbox.fake.returns(true);
         const someDefaultState = t.context.sandbox.fake.returns(false);
-        const resources = { someChosenState, someDefaultState };
         const definition = {
             StartAt: 'some choice state',
             States: {
@@ -510,7 +509,7 @@ test('choices rule tests', async t => {
                 }
             }
         };
-        const trajectory = new Trajectory({ ...testOptions, resources });
+        const trajectory = new Trajectory(testOptions);
         return await trajectory.execute(definition, { input });
     }
     t.deepEqual((await run('BooleanEquals', true, true)).pop(), true);
@@ -545,4 +544,55 @@ test('choices rule tests', async t => {
     t.deepEqual((await run('TimestampGreaterThan', 'July 4, 2019', 'July 5, 2019')).pop(), false);
     t.deepEqual((await run('TimestampGreaterThan', 'July 4, 2019', 'July 4, 2019')).pop(), false);
     t.deepEqual((await run('TimestampGreaterThanEquals', 'July 4, 2019', 'July 4, 2019')).pop(), true);
+});
+
+test('choices rule tests - 2', async t => {
+    async function run(operation, input1, value1, input2, value2) {
+        const doorNumber1 = t.context.sandbox.fake.returns(true);
+        const doorNumber2 = t.context.sandbox.fake.returns(false);
+        const definition = {
+            StartAt: 'some choice state',
+            States: {
+                'some choice state': {
+                    Type: 'Choice',
+                    Choices: [
+                        {
+                            [operation]: [
+                                {
+                                    Variable: '$.input1',
+                                    BooleanEquals: value1
+                                },
+                                {
+                                    Variable: '$.input2',
+                                    BooleanEquals: value1
+                                }
+                            ],
+                            Next: 'door number 1'
+                        }
+                    ],
+                    Default: 'door number 2'
+                },
+                'door number 1': {
+                    Type: 'Task',
+                    Resource: doorNumber1,
+                    End: true
+                },
+                'door number 2': {
+                    Type: 'Task',
+                    Resource: doorNumber2,
+                    End: true
+                }
+            }
+        };
+        const trajectory = new Trajectory(testOptions);
+        return await trajectory.execute(definition, { input1, input2 });
+    }
+    t.deepEqual((await run('And', true, true, true, true)).pop(), true);
+    t.deepEqual((await run('And', true, true, true, false)).pop(), false);
+    t.deepEqual((await run('And', true, true, false, true)).pop(), false);
+    t.deepEqual((await run('And', true, false, true, true)).pop(), false);
+    t.deepEqual((await run('And', false, true, true, true)).pop(), false);
+    t.deepEqual((await run('And', false, false, false, false)).pop(), true);
+    t.deepEqual((await run('And', false, false, true, true)).pop(), true);
+    t.deepEqual((await run('And', true, true, false, false)).pop(), true);
 });

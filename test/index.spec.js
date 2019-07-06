@@ -357,7 +357,6 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
 });
 
 test('should handle parallel executions', async t => {
-    t.plan(3);
     const b = t.context.sandbox.fake.returns({ b: 'b' });
     const c = t.context.sandbox.fake.returns({ c: 'c' });
     const resources = { b, c };
@@ -402,8 +401,7 @@ test('should handle parallel executions', async t => {
     t.deepEqual(results, [ {}, [ [ { b: 'b' } ], [ { c: 'c' } ] ], [ [ { b: 'b' } ], [ { c: 'c' } ] ] ]);
 });
 
-test('choices StringEquals - 1', async t => {
-    t.plan(3);
+test('choices branch test - 1', async t => {
     const someFooState = t.context.sandbox.fake.returns('hello from foo');
     const someDefaultState = t.context.sandbox.fake.returns('hello from default');
     const resources = { someFooState, someDefaultState };
@@ -442,8 +440,7 @@ test('choices StringEquals - 1', async t => {
     t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from foo' } ]);
 });
 
-test('choices StringEquals - 2', async t => {
-    t.plan(3);
+test('choices branch test - 2', async t => {
     const someFooState = t.context.sandbox.fake.returns('hello from foo');
     const someDefaultState = t.context.sandbox.fake.returns('hello from default');
     const resources = { someFooState, someDefaultState };
@@ -482,162 +479,70 @@ test('choices StringEquals - 2', async t => {
     t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from default' } ]);
 });
 
-test('choices StringLessThan - 1', async t => {
-    t.plan(3);
-    const someFooState = t.context.sandbox.fake.returns('hello from foo');
-    const someDefaultState = t.context.sandbox.fake.returns('hello from default');
-    const resources = { someFooState, someDefaultState };
-    const definition = {
-        StartAt: 'some choice state',
-        States: {
-            'some choice state': {
-                Type: 'Choice',
-                Choices: [
-                    {
-                        Variable: '$.input',
-                        StringLessThan: 'fon',
-                        Next: 'some foo state'
-                    }
-                ],
-                Default: 'some default state'
-            },
-            'some foo state': {
-                Type: 'Task',
-                Resource: someFooState,
-                ResultPath: 'message',
-                End: true
-            },
-            'some default state': {
-                Type: 'Task',
-                Resource: someDefaultState,
-                ResultPath: 'message',
-                End: true
+test('choices rule tests', async t => {
+    async function run(operation, input, value) {
+        const someChosenState = t.context.sandbox.fake.returns(true);
+        const someDefaultState = t.context.sandbox.fake.returns(false);
+        const resources = { someChosenState, someDefaultState };
+        const definition = {
+            StartAt: 'some choice state',
+            States: {
+                'some choice state': {
+                    Type: 'Choice',
+                    Choices: [
+                        {
+                            Variable: '$.input',
+                            [operation]: value,
+                            Next: 'some chosen state'
+                        }
+                    ],
+                    Default: 'some default state'
+                },
+                'some chosen state': {
+                    Type: 'Task',
+                    Resource: someChosenState,
+                    End: true
+                },
+                'some default state': {
+                    Type: 'Task',
+                    Resource: someDefaultState,
+                    End: true
+                }
             }
-        }
-    };
-    const trajectory = new Trajectory({ ...testOptions, resources });
-    const results = await trajectory.execute(definition, { input: 'foo' });
-    t.assert(someFooState.callCount === 0);
-    t.assert(someDefaultState.calledWith({ input: 'foo' }));
-    t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from default' } ]);
-});
-
-test('choices StringLessThan - 2', async t => {
-    t.plan(3);
-    const someFooState = t.context.sandbox.fake.returns('hello from foo');
-    const someDefaultState = t.context.sandbox.fake.returns('hello from default');
-    const resources = { someFooState, someDefaultState };
-    const definition = {
-        StartAt: 'some choice state',
-        States: {
-            'some choice state': {
-                Type: 'Choice',
-                Choices: [
-                    {
-                        Variable: '$.input',
-                        StringLessThan: 'fop',
-                        Next: 'some foo state'
-                    }
-                ],
-                Default: 'some default state'
-            },
-            'some foo state': {
-                Type: 'Task',
-                Resource: someFooState,
-                ResultPath: 'message',
-                End: true
-            },
-            'some default state': {
-                Type: 'Task',
-                Resource: someDefaultState,
-                ResultPath: 'message',
-                End: true
-            }
-        }
-    };
-    const trajectory = new Trajectory({ ...testOptions, resources });
-    const results = await trajectory.execute(definition, { input: 'foo' });
-    t.assert(someDefaultState.callCount === 0);
-    t.assert(someFooState.calledWith({ input: 'foo' }));
-    t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from foo' } ]);
-});
-
-test('choices StringGreaterThan - 1', async t => {
-    t.plan(3);
-    const someFooState = t.context.sandbox.fake.returns('hello from foo');
-    const someDefaultState = t.context.sandbox.fake.returns('hello from default');
-    const resources = { someFooState, someDefaultState };
-    const definition = {
-        StartAt: 'some choice state',
-        States: {
-            'some choice state': {
-                Type: 'Choice',
-                Choices: [
-                    {
-                        Variable: '$.input',
-                        StringGreaterThan: 'fon',
-                        Next: 'some foo state'
-                    }
-                ],
-                Default: 'some default state'
-            },
-            'some foo state': {
-                Type: 'Task',
-                Resource: someFooState,
-                ResultPath: 'message',
-                End: true
-            },
-            'some default state': {
-                Type: 'Task',
-                Resource: someDefaultState,
-                ResultPath: 'message',
-                End: true
-            }
-        }
-    };
-    const trajectory = new Trajectory({ ...testOptions, resources });
-    const results = await trajectory.execute(definition, { input: 'foo' });
-    t.assert(someDefaultState.callCount === 0);
-    t.assert(someFooState.calledWith({ input: 'foo' }));
-    t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from foo' } ]);
-});
-
-test('choices StringGreaterThan - 2', async t => {
-    t.plan(3);
-    const someFooState = t.context.sandbox.fake.returns('hello from foo');
-    const someDefaultState = t.context.sandbox.fake.returns('hello from default');
-    const resources = { someFooState, someDefaultState };
-    const definition = {
-        StartAt: 'some choice state',
-        States: {
-            'some choice state': {
-                Type: 'Choice',
-                Choices: [
-                    {
-                        Variable: '$.input',
-                        StringGreaterThan: 'fop',
-                        Next: 'some foo state'
-                    }
-                ],
-                Default: 'some default state'
-            },
-            'some foo state': {
-                Type: 'Task',
-                Resource: someFooState,
-                ResultPath: 'message',
-                End: true
-            },
-            'some default state': {
-                Type: 'Task',
-                Resource: someDefaultState,
-                ResultPath: 'message',
-                End: true
-            }
-        }
-    };
-    const trajectory = new Trajectory({ ...testOptions, resources });
-    const results = await trajectory.execute(definition, { input: 'foo' });
-    t.assert(someFooState.callCount === 0);
-    t.assert(someDefaultState.calledWith({ input: 'foo' }));
-    t.deepEqual(results, [ { input: 'foo' }, { input: 'foo' }, { input: 'foo', message: 'hello from default' } ]);
+        };
+        const trajectory = new Trajectory({ ...testOptions, resources });
+        return await trajectory.execute(definition, { input });
+    }
+    t.deepEqual((await run('BooleanEquals', true, true)).pop(), true);
+    t.deepEqual((await run('BooleanEquals', true, false)).pop(), false);
+    t.deepEqual((await run('StringEquals', 'foo', 'foo')).pop(), true);
+    t.deepEqual((await run('StringEquals', 'bar', 'foo')).pop(), false)
+    t.deepEqual((await run('StringLessThan', 'fon', 'foo')).pop(), true);
+    t.deepEqual((await run('StringLessThan', 'fop', 'foo')).pop(), false);
+    t.deepEqual((await run('StringLessThan', 'foo', 'foo')).pop(), false);
+    t.deepEqual((await run('StringLessThanEquals', 'foo', 'foo')).pop(), true);
+    t.deepEqual((await run('StringGreaterThan', 'fop', 'foo')).pop(), true);
+    t.deepEqual((await run('StringGreaterThan', 'fon', 'foo')).pop(), false);
+    t.deepEqual((await run('StringGreaterThan', 'foo', 'foo')).pop(), false);
+    t.deepEqual((await run('StringGreaterThanEquals', 'foo', 'foo')).pop(), true);
+    t.deepEqual((await run('NumericEquals', 1, 1)).pop(), true);
+    t.deepEqual((await run('NumericEquals', 2, 1)).pop(), false);
+    t.deepEqual((await run('NumericLessThan', 1, 2)).pop(), true);
+    t.deepEqual((await run('NumericLessThan', 2, 1)).pop(), false);
+    t.deepEqual((await run('NumericLessThan', 1, 1)).pop(), false);
+    t.deepEqual((await run('NumericLessThanEquals', 1, 1)).pop(), true);
+    t.deepEqual((await run('NumericGreaterThan', 2, 1)).pop(), true);
+    t.deepEqual((await run('NumericGreaterThan', 1, 2)).pop(), false);
+    t.deepEqual((await run('NumericGreaterThan', 1, 1)).pop(), false);
+    t.deepEqual((await run('NumericGreaterThanEquals', 1, 1)).pop(), true);
+    t.deepEqual((await run('TimestampEquals', 'July 4, 2019', 'July 4, 2019')).pop(), true);
+    t.deepEqual((await run('TimestampEquals', 'July 4, 2019', 'July 5, 2019')).pop(), false);
+    t.deepEqual((await run('TimestampLessThan', 'July 4, 2019', 'July 5, 2019')).pop(), true);
+    t.deepEqual((await run('TimestampLessThan', 'July 5, 2019', 'July 4, 2019')).pop(), false);
+    t.deepEqual((await run('TimestampLessThan', 'July 4, 2019', 'July 4, 2019')).pop(), false);
+    t.deepEqual((await run('TimestampLessThanEquals', 'July 4, 2019', 'July 4, 2019')).pop(), true);
+    t.deepEqual((await run('TimestampGreaterThan', 'July 5, 2019', 'July 4, 2019')).pop(), true);
+    t.deepEqual((await run('TimestampGreaterThan', 'July 4, 2019', 'July 5, 2019')).pop(), false);
+    t.deepEqual((await run('TimestampGreaterThan', 'July 4, 2019', 'July 4, 2019')).pop(), false);
+    t.deepEqual((await run('TimestampGreaterThanEquals', 'July 4, 2019', 'July 4, 2019')).pop(), true);
 });

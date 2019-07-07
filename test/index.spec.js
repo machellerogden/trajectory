@@ -89,19 +89,19 @@ test('should thread io through states - resultPath', async t => {
             a: {
                 Type: 'Task',
                 Resource: 'a',
-                ResultPath: 'apath',
+                ResultPath: '$.apath',
                 Next: 'b'
             },
             c: {
                 Type: 'Task',
                 Resource: 'c',
-                ResultPath: 'cpath',
+                ResultPath: '$.cpath',
                 End: true
             },
             b: {
                 Type: 'Task',
                 Resource: 'b',
-                ResultPath: 'bpath',
+                ResultPath: '$.bpath',
                 Next: 'c'
             }
         }
@@ -162,21 +162,21 @@ test('should thread io through states - resultPath + inputPath', async t => {
             a: {
                 Type: 'Task',
                 Resource: 'a',
-                ResultPath: 'apath',
+                ResultPath: '$.apath',
                 Next: 'b'
             },
             c: {
                 Type: 'Task',
                 Resource: 'c',
                 InputPath: '$.bpath',
-                ResultPath: 'cpath',
+                ResultPath: '$.cpath',
                 End: true
             },
             b: {
                 Type: 'Task',
                 Resource: 'b',
                 InputPath: '$.apath',
-                ResultPath: 'bpath',
+                ResultPath: '$.bpath',
                 Next: 'c'
             }
         }
@@ -230,14 +230,14 @@ test('should thread io through states - resultPath + inputPath + outputPath', as
             a: {
                 Type: 'Task',
                 Resource: 'a',
-                ResultPath: 'apath',
+                ResultPath: '$.apath',
                 Next: 'b'
             },
             c: {
                 Type: 'Task',
                 Resource: 'c',
                 InputPath: '$.bpath',
-                ResultPath: 'cpath',
+                ResultPath: '$.cpath',
                 OutputPath: '$.cpath.c',
                 End: true
             },
@@ -245,7 +245,7 @@ test('should thread io through states - resultPath + inputPath + outputPath', as
                 Type: 'Task',
                 Resource: 'b',
                 InputPath: '$.apath',
-                ResultPath: 'bpath',
+                ResultPath: '$.bpath',
                 Next: 'c'
             }
         }
@@ -291,14 +291,14 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
             a: {
                 Type: 'Task',
                 Resource: 'a',
-                ResultPath: 'apath',
+                ResultPath: '$.apath',
                 Next: 'b'
             },
             c: {
                 Type: 'Task',
                 Resource: 'c',
                 InputPath: '$.bpath',
-                ResultPath: 'cpath',
+                ResultPath: '$.cpath',
                 OutputPath: '$.cpath',
                 Next: 'd'
             },
@@ -306,7 +306,7 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
                 Type: 'Task',
                 Resource: 'b',
                 InputPath: '$.apath',
-                ResultPath: 'bpath',
+                ResultPath: '$.bpath',
                 Next: 'c'
             },
             d: {
@@ -315,7 +315,7 @@ test('should thread io through states - resultPath + inputPath + outputPath + pa
                 Parameters: {
                     'renamedC.$': '$.c'
                 },
-                //resultPath: 'dpath',
+                //resultPath: '$.dpath',
                 End: true
             }
         }
@@ -422,13 +422,13 @@ test('choices branch test - 1', async t => {
             'some foo state': {
                 Type: 'Task',
                 Resource: someFooState,
-                ResultPath: 'message',
+                ResultPath: '$.message',
                 End: true
             },
             'some default state': {
                 Type: 'Task',
                 Resource: someDefaultState,
-                ResultPath: 'message',
+                ResultPath: '$.message',
                 End: true
             }
         }
@@ -461,13 +461,13 @@ test('choices branch test - 2', async t => {
             'some foo state': {
                 Type: 'Task',
                 Resource: someFooState,
-                ResultPath: 'message',
+                ResultPath: '$.message',
                 End: true
             },
             'some default state': {
                 Type: 'Task',
                 Resource: someDefaultState,
-                ResultPath: 'message',
+                ResultPath: '$.message',
                 End: true
             }
         }
@@ -564,7 +564,7 @@ test('choices rule tests - 2', async t => {
                                 },
                                 {
                                     Variable: '$.input2',
-                                    BooleanEquals: value1
+                                    BooleanEquals: value2
                                 }
                             ],
                             Next: 'door number 1'
@@ -595,4 +595,53 @@ test('choices rule tests - 2', async t => {
     t.deepEqual((await run('And', false, false, false, false)).pop(), true);
     t.deepEqual((await run('And', false, false, true, true)).pop(), true);
     t.deepEqual((await run('And', true, true, false, false)).pop(), true);
+    t.deepEqual((await run('And', true, false, true, false)).pop(), false);
+    t.deepEqual((await run('Or', true, true, true, true)).pop(), true);
+    t.deepEqual((await run('Or', true, true, true, false)).pop(), true);
+    t.deepEqual((await run('Or', true, true, false, true)).pop(), true);
+    t.deepEqual((await run('Or', true, false, true, true)).pop(), true);
+    t.deepEqual((await run('Or', false, true, true, true)).pop(), true);
+    t.deepEqual((await run('Or', false, false, false, false)).pop(), true);
+    t.deepEqual((await run('Or', false, false, true, true)).pop(), true);
+    t.deepEqual((await run('Or', true, true, false, false)).pop(), true);
+    t.deepEqual((await run('Or', true, false, true, false)).pop(), false);
+});
+
+test('choices rule tests - 3', async t => {
+    async function run(input, value) {
+        const doorNumber1 = t.context.sandbox.fake.returns(true);
+        const doorNumber2 = t.context.sandbox.fake.returns(false);
+        const definition = {
+            StartAt: 'some choice state',
+            States: {
+                'some choice state': {
+                    Type: 'Choice',
+                    Choices: [
+                        {
+                            Not: {
+                                Variable: '$.input',
+                                BooleanEquals: value
+                            },
+                            Next: 'door number 1'
+                        }
+                    ],
+                    Default: 'door number 2'
+                },
+                'door number 1': {
+                    Type: 'Task',
+                    Resource: doorNumber1,
+                    End: true
+                },
+                'door number 2': {
+                    Type: 'Task',
+                    Resource: doorNumber2,
+                    End: true
+                }
+            }
+        };
+        const trajectory = new Trajectory(testOptions);
+        return await trajectory.execute(definition, { input });
+    }
+    t.deepEqual((await run(true, true)).pop(), false);
+    t.deepEqual((await run(true, false)).pop(), true);
 });

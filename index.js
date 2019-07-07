@@ -147,7 +147,7 @@ class Trajectory extends EventEmitter {
                 message: `Catching error in "${name}"`
             });
             const errorOutput = catcher.ResultPath != null
-                ? set(clone(io), catcher.ResultPath, { error: error })
+                ? set(clone(io), asPath(catcher.ResultPath), { error: error })
                 : { error };
             yield { name, data: errorOutput };
             io = clone(errorOutput);
@@ -312,7 +312,7 @@ function IOCtrl({ getState, getIO, cc }) {
         const state = getState();
         if (state.Result) return state.Result;
         if (state.ResultPath == null) return await value;
-        return set(getIO(), state.ResultPath, await value);
+        return set(getIO(), asPath(state.ResultPath), await value);
     }
 
     async function delayOutput(data) {
@@ -381,15 +381,17 @@ const ruleOperations = {
     Not: a => !a
 };
 
-function applyRule(rule, io) {
+function applyRule(r, io) {
+    let { Next, ...rule } = r;
     if (rule.Variable) {
         return applyComparison(rule, io);
     } else {
-        const withAppliedComparisons = Object.entries(rule).reduce((acc, [ key, value ]) => {
-            return Array.isArray(value)
-                ? value.map(v => applyRule(v, io))
-                : applyRule(value, io);
-        }, null);
+        const withAppliedComparisons = Object.entries(rule)
+            .reduce((acc, [ key, value ]) =>
+                Array.isArray(value)
+                    ? value.map(v => applyRule(v, io))
+                    : applyRule(value, io),
+                null);
         const operation = Object.keys(rule).shift();
         return ruleOperations[operation](withAppliedComparisons);
     }
@@ -401,6 +403,15 @@ function applyComparison(rule, io) {
     const operation = Object.keys(rest).shift();
     const comparisonValue = rest[operation];
     return ruleOperations[operation](value, comparisonValue);
+}
+
+function asPath(referencePath) {
+    const {
+        groups: {
+            path = referencePath
+        } = {}
+    } = referencePath.match(/^\$[\.]?(?<path>.*)/) || {};
+    return path;
 }
 
 module.exports = { Trajectory };

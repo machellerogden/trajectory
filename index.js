@@ -16,6 +16,10 @@ const builtInReporter = require('./lib/reporter');
 const endStates = new Set([ 'Succeed', 'Fail']);
 const isEnd = state => state.End || endStates.has(state.Type);
 
+function createErrorFinder(error) {
+    return r => r.ErrorEquals.reduce((acc, v) => acc || v === error.name || v === 'States.ALL', false);
+}
+
 class Trajectory extends EventEmitter {
 
     constructor(opts = {}) {
@@ -117,8 +121,9 @@ class Trajectory extends EventEmitter {
                 name,
                 message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
             });
-            const retrier = (state.Retry || []).find(r => r.ErrorEquals.includes(error.name));
-            const catcher = (state.Catch || []).find(c => c.ErrorEquals.includes(error.name));
+            const findError = createErrorFinder(error);
+            const retrier = (state.Retry || []).find(findError);
+            const catcher = (state.Catch || []).find(findError);
             if (retrier) {
                 try {
                     yield* await retry(retrier, fn, error);

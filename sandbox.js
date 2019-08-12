@@ -1,6 +1,6 @@
 const { Trajectory } = require('.');
 
-const a = async (input, onCancel) => new Promise((resolve, reject) => {
+const a = async (input, { onCancel }) => new Promise((resolve, reject) => {
     const handle = setTimeout(() => resolve({ a: 'a' }), 1000);
     onCancel(reason => {
         clearTimeout(handle);
@@ -8,7 +8,7 @@ const a = async (input, onCancel) => new Promise((resolve, reject) => {
     });
 });
 
-const aa = async (input, onCancel) => new Promise((resolve, reject) => {
+const aa = async (input, { onCancel }) => new Promise((resolve, reject) => {
     const handle = setTimeout(() => reject(new Error('boom')), 500);
     onCancel(reason => {
         clearTimeout(handle);

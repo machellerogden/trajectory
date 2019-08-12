@@ -257,8 +257,8 @@ function Handlers(context) {
                 ? state.Resource
                 : context.resources[state.Resource];
             const cancellableFn = state.TimeoutSeconds == null
-                ? io => context.cc.Cancellable(onCancel => fn(io, onCancel))
-                : io => context.cc.Perishable(onCancel => fn(io, onCancel), state.TimeoutSeconds * 1000);
+                ? io => context.cc.Cancellable(onCancel => fn(io, { Resource: state.Resource, onCancel }))
+                : io => context.cc.Perishable(onCancel => fn(io, { Resource: state.Resource, onCancel }), state.TimeoutSeconds * 1000);
             return compose(processOutput, cancellableFn, processInput)(io);
         },
         async Pass(state, io) {

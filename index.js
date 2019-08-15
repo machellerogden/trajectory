@@ -316,8 +316,9 @@ function IOCtrl({ getState, getIO, cc }) {
     async function toResult(value) {
         const state = getState();
         if (state.Result) return state.Result;
-        if (state.ResultPath == null) return await value;
-        return set(getIO(), asPath(state.ResultPath), await value);
+        const v = await value;
+        if (state.ResultPath == null || state.ResultPath === '$') return v;
+        return set(getIO(), asPath(state.ResultPath), v);
     }
 
     async function delayOutput(data) {
@@ -353,7 +354,9 @@ function IOCtrl({ getState, getIO, cc }) {
 
 function applyDataToParameters(data, result = {}, key, value, recur) {
     if (key.endsWith('.$')) {
-        result[key.slice(0, -2)] = JSONPath.query(data, value).shift();
+        result[key.slice(0, -2)] = value === '$'
+            ? data
+            : JSONPath.query(data, value).shift();
     } else {
         result[key] = recur(value[key]);
     }

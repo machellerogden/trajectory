@@ -356,10 +356,12 @@ function applyDataToParameters(data, result = {}, key, value, recur) {
     if (key.endsWith('.$')) {
         result[key.slice(0, -2)] = value === '$'
             ? data
-            : JSONPath.query(data, value).shift();
+            : value.includes('$')
+                ? JSONPath.query(data, value).shift()
+                : value;
     } else {
         result[key] = value != null && typeof value === 'object'
-            ? recur(value[key])
+            ? recur(value)
             : value;
     }
     return result;

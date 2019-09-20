@@ -358,7 +358,9 @@ function applyDataToParameters(data, result = {}, key, value, recur) {
             ? data
             : JSONPath.query(data, value).shift();
     } else {
-        result[key] = recur(value[key]);
+        result[key] = value != null && typeof value === 'object'
+            ? recur(value[key])
+            : value;
     }
     return result;
 }

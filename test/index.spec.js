@@ -645,3 +645,30 @@ test('choices rule tests - 3', async t => {
     t.deepEqual((await run(true, true)).pop(), false);
     t.deepEqual((await run(true, false)).pop(), true);
 });
+
+test('params tests - 1', async t => {
+    async function run() {
+        const foo = t.context.sandbox.fake.returns(true);
+        const definition = {
+            StartAt: 'my pass',
+            States: {
+                'my pass': {
+                    Type: 'Pass',
+                    Parameters: {
+                        foo: "bar"
+                    },
+                    Next: "foo"
+                },
+                'foo': {
+                    Type: 'Task',
+                    Resource: foo,
+                    End: true
+                }
+            }
+        };
+        const trajectory = new Trajectory(testOptions);
+        return await trajectory.execute(definition, {});
+    }
+    const results = await run();
+    t.deepEqual(results[1], {foo:"bar"});
+});

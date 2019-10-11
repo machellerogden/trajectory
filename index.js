@@ -34,6 +34,7 @@ class Trajectory extends EventEmitter {
             debug = false,
             silent = false,
             reporter = builtInReporter,
+            reporterOptions = {},
             resources = {}
         } = options;
 
@@ -44,6 +45,7 @@ class Trajectory extends EventEmitter {
         this.cc = CancellationContext();
 
         this.reporter = reporter;
+        this.reporterOptions = reporterOptions;
         this.depth = 0;
 
         this.silent = silent;
@@ -51,11 +53,13 @@ class Trajectory extends EventEmitter {
     }
 
     reportHandler({ type, name, data, message }) {
+        this.reporterOptions;
         this.reporter[type.toLowerCase()]({
             name,
             data,
             message,
-            depth: this.depth
+            depth: this.depth,
+            options: this.reporterOptions
         });
     }
 

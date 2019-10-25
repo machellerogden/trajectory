@@ -115,7 +115,8 @@ class Trajectory extends EventEmitter {
         async function* unsafeAttempt(fn) {
             const output = await fn(state, io);
             yield { name, data: output };
-            emit({ type: 'Succeed', name, data: output });
+            emit({ type: 'Info', name, data: output });
+            emit({ type: 'Succeed', name });
             io = clone(output);
         }
 

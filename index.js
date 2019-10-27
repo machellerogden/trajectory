@@ -69,6 +69,7 @@ class Trajectory extends EventEmitter {
         let results;
         try {
             results = await this.executeStateMachine(stateMachine, input);
+            this.emit('event', { type: 'Final', name: 'final', data: results[results.length - 1] })
             this.emit('event', { type: 'Complete', name: 'completed', data: results })
             return [ input, ...results ];
         } catch (e) {

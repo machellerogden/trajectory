@@ -22,6 +22,8 @@ function createErrorFinder(error) {
     return r => r.ErrorEquals.reduce((acc, v) => acc || v === error.name || v === 'States.ALL', false);
 }
 
+const isStream = 'is-trajectory-result-stream';
+
 class Trajectory extends EventEmitter {
 
     constructor(opts = {}) {
@@ -71,7 +73,18 @@ class Trajectory extends EventEmitter {
         let results;
         try {
             results = await this.executeStateMachine(stateMachine, input);
-            this.emit('event', { type: 'Final', name: 'final', data: results[results.length - 1] })
+            let final = results[results.length - 1];
+            let finalIsStream = final[isStream];
+            final = final.constructor.name === 'String' ? final.valueOf() : final;
+            const finalEvent = {
+                type: 'Final',
+                name: 'final',
+                data: final,
+                stream: finalIsStream
+            };
+            console.log('- final is stream?', finalIsStream)
+            console.log('- final event is', finalEvent);
+            this.emit('event', finalEvent)
             this.emit('event', { type: 'Complete', name: 'completed', data: results })
             return [ input, ...results ];
         } catch (e) {
@@ -118,7 +131,7 @@ class Trajectory extends EventEmitter {
         async function* unsafeAttempt(fn) {
             const result = await fn(state, io);
             let data = result;
-            let silent = false;
+            let stream = false;
 
             if (isReadableStream(result) || isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
                 let streamPromises = [];
@@ -136,18 +149,21 @@ class Trajectory extends EventEmitter {
                     streamPromises.push(streamToPromise(result.stderr));
                 }
 
-                silent = true;
 
-                const [ stdout, stderr = '' ] = await Promise.all(streamPromises)
+                const [ stdout = '', stderr = '' ] = await Promise.all(streamPromises)
 
                 const out = stdout.toString().trimRight();
                 const err = stderr.toString().trimRight();
                 data = `${out}${out && err ? EOL : ''}${err}`;
+
+                stream = true;
+                if (typeof data === 'string') data = new String(data);
+                data[isStream] = true;
             }
 
             yield { name, data };
-            emit({ type: 'Info', name, data, silent });
-            emit({ type: 'Succeed', name, silent });
+            emit({ type: 'Info', name, data, stream });
+            emit({ type: 'Succeed', name, stream });
             io = clone(result);
         }
 

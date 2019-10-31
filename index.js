@@ -12,6 +12,8 @@ const CancellationContext = require('cancellation-context');
 const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
 const { sleep, reduceAny, isPromise, isReadableStream } = require('./lib/util');
 const builtInReporter = require('./lib/reporter');
+const { EOL } = require('os');
+const streamToPromise = require('stream-to-promise');
 
 const endStates = new Set([ 'Succeed', 'Fail']);
 const isEnd = state => state.End || endStates.has(state.Type);
@@ -114,20 +116,38 @@ class Trajectory extends EventEmitter {
         const handlers = Handlers(context);
 
         async function* unsafeAttempt(fn) {
-            const result = fn(state, io);
-            const output = await result;
+            const result = await fn(state, io);
+            let data = result;
             let silent = false;
+
             if (isReadableStream(result) || isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
-                if (isReadableStream(result)) result.pipe(process.stdout);
-                if (isReadableStream(result.stdout)) result.stdout.pipe(process.stdout);
-                if (isReadableStream(result.stderr)) result.stderr.pipe(process.stderr);
-                console.log('here');
+                let streamPromises = [];
+
+                if (isReadableStream(result)) {
+                    result.pipe(process.stdout);
+                    streamPromises.push(streamToPromise(result));
+                } else if (isReadableStream(result.stdout)) {
+                    result.stdout.pipe(process.stdout);
+                    streamPromises.push(streamToPromise(result.stdout));
+                }
+
+                if (isReadableStream(result.stderr)) {
+                    result.stderr.pipe(process.stderr);
+                    streamPromises.push(streamToPromise(result.stderr));
+                }
+
                 silent = true;
+
+                const [ stdout, stderr ] = await Promise.all(streamPromises)
+
+                const out = stdout.toString().trimRight();
+                const err = stderr.toString().trimRight();
+                data = `${out}${out && err ? EOL : ''}${err}`;
             }
-            yield { name, data: output };
-            emit({ type: 'Info', name, data: output, silent });
-            emit({ type: 'Succeed', name });
-            io = clone(output);
+            yield { name, data };
+            emit({ type: 'Info', name, data, silent });
+            emit({ type: 'Succeed', name, silent });
+            io = clone(result);
         }
 
         async function* handleError(fn, error) {

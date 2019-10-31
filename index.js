@@ -10,7 +10,7 @@ const ordinal = require('ordinal');
 const CancellationContext = require('cancellation-context');
 
 const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
-const { sleep, reduceAny } = require('./lib/util');
+const { sleep, reduceAny, isPromise, isReadableStream } = require('./lib/util');
 const builtInReporter = require('./lib/reporter');
 
 const endStates = new Set([ 'Succeed', 'Fail']);
@@ -114,9 +114,18 @@ class Trajectory extends EventEmitter {
         const handlers = Handlers(context);
 
         async function* unsafeAttempt(fn) {
-            const output = await fn(state, io);
+            const result = fn(state, io);
+            const output = await result;
+            let silent = false;
+            if (isReadableStream(result) || isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
+                if (isReadableStream(result)) result.pipe(process.stdout);
+                if (isReadableStream(result.stdout)) result.stdout.pipe(process.stdout);
+                if (isReadableStream(result.stderr)) result.stderr.pipe(process.stderr);
+                console.log('here');
+                silent = true;
+            }
             yield { name, data: output };
-            emit({ type: 'Info', name, data: output });
+            emit({ type: 'Info', name, data: output, silent });
             emit({ type: 'Succeed', name });
             io = clone(output);
         }

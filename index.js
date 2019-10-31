@@ -138,12 +138,13 @@ class Trajectory extends EventEmitter {
 
                 silent = true;
 
-                const [ stdout, stderr ] = await Promise.all(streamPromises)
+                const [ stdout, stderr = '' ] = await Promise.all(streamPromises)
 
                 const out = stdout.toString().trimRight();
                 const err = stderr.toString().trimRight();
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }
+
             yield { name, data };
             emit({ type: 'Info', name, data, silent });
             emit({ type: 'Succeed', name, silent });

@@ -25,6 +25,7 @@
     "log-symbols": "^3.0.0",
     "ordinal": "^1.0.3",
     "serialize-error": "^4.1.0",
+    "stream-line-wrapper": "^0.1.1",
     "stream-to-promise": "^2.2.0"
   },
   "devDependencies": {

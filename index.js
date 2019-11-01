@@ -55,13 +55,15 @@ class Trajectory extends EventEmitter {
         if (!silent) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data, message, streamed }) {
+    reportHandler({ type, name, data, message, streamed, closed }) {
         this.reporterOptions;
         this.reporter[type.toLowerCase()]({
             name,
             data,
+            data,
             message,
             streamed,
+            closed,
             depth: this.depth,
             options: this.reporterOptions
         });
@@ -131,6 +133,8 @@ class Trajectory extends EventEmitter {
             if (isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
                 streamed = true;
                 let streamPromises = [];
+                result.on('close', code => code === 0 ? emit({ type: 'stdout', name, closed: true })
+                                                      : emit({ type: 'stderr', name, closed: true }));
                 if (isReadableStream(result.stdout)) {
                     byline(result.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stdout));

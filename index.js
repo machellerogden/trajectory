@@ -140,8 +140,10 @@ class Trajectory extends EventEmitter {
                     byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stderr));
                 }
-                result.on('close', code => code === 0 ? emit({ type: 'stdout', name, closed: true })
-                                                      : emit({ type: 'stderr', name, closed: true }));
+                result.on('close', code =>
+                    code === 0               ? emit({ type: 'stdout', name, closed: true })
+                  : typeof code === 'number' ? emit({ type: 'stderr', name, closed: true })
+                  :                            null);
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }

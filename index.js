@@ -133,8 +133,6 @@ class Trajectory extends EventEmitter {
             if (isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
                 streamed = true;
                 let streamPromises = [];
-                result.on('close', code => code === 0 ? emit({ type: 'stdout', name, closed: true })
-                                                      : emit({ type: 'stderr', name, closed: true }));
                 if (isReadableStream(result.stdout)) {
                     byline(result.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stdout));
@@ -142,6 +140,8 @@ class Trajectory extends EventEmitter {
                     byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stderr));
                 }
+                result.on('close', code => code === 0 ? emit({ type: 'stdout', name, closed: true })
+                                                      : emit({ type: 'stderr', name, closed: true }));
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }

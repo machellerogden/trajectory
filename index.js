@@ -76,8 +76,7 @@ class Trajectory extends EventEmitter {
         try {
             results = await this.executeStateMachine(stateMachine, input);
             const data = results.map(({ data }) => data);
-            //console.log('results:', require('util').inspect(results, { depth: null, colors: true }));
-
+            //console.log('results:', require('util').inspect(results, { depth: null, colors: true })); 
             const finalResult = results[results.length - 1];
             const { data:finalData, streamed:finalStreamed } = finalResult;
             this.emit('event', { type: 'Final', name: 'final', data: finalData, streamed: finalStreamed });
@@ -140,10 +139,9 @@ class Trajectory extends EventEmitter {
                     byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stderr));
                 }
-                result.on('close', code =>
-                    code === 0               ? emit({ type: 'stdout', name, closed: true })
-                  : typeof code === 'number' ? emit({ type: 'stderr', name, closed: true })
-                  :                            null);
+                result.once('exit', (code, signal) => code != 0
+                    ? emit({ type: 'stderr', name, closed: true })
+                    : emit({ type: 'stdout', name, closed: true }));
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }

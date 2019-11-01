@@ -124,12 +124,12 @@ class Trajectory extends EventEmitter {
 
         const handlers = Handlers(context);
 
-        async function* unsafeAttempt(fn) {
+        async function* unsafeAttempt(fn, type) {
             const result = await fn(state, io);
             let data = result;
             let streamed = false;
 
-            if (isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
+            if (type !== 'parallel' && (isReadableStream(result.stdout) || isReadableStream(result.stderr))) {
                 streamed = true;
                 let streamPromises = [];
                 if (isReadableStream(result.stdout)) {
@@ -153,7 +153,7 @@ class Trajectory extends EventEmitter {
             io = clone(result);
         }
 
-        async function* handleError(fn, error) {
+        async function* handleError(fn, error, type) {
             emit({
                 type: 'Info',
                 name,
@@ -164,10 +164,10 @@ class Trajectory extends EventEmitter {
             const catcher = (state.Catch || []).find(findError);
             if (retrier) {
                 try {
-                    yield* await retry(retrier, fn, error);
+                    yield* await retry(retrier, fn, error, type);
                 } catch (retryError) {
                     if (catcher) {
-                        yield* await catchError(catcher, fn, retryError);
+                        yield* await catchError(catcher, fn, retryError, type);
                     } else {
                         yield { name, data: retryError };
                         emit({ type: 'Error', name, data: retryError });
@@ -175,7 +175,7 @@ class Trajectory extends EventEmitter {
                     }
                 }
             } else if (catcher) {
-                yield* await catchError(catcher, fn, error);
+                yield* await catchError(catcher, fn, error, type);
             } else {
                 yield { name, data: error };
                 emit({ type: 'Error', name, data: error });
@@ -183,7 +183,7 @@ class Trajectory extends EventEmitter {
             }
         }
 
-        async function* catchError(catcher, fn, error) {
+        async function* catchError(catcher, fn, error, type) {
             emit({
                 type: 'Info',
                 name,
@@ -199,7 +199,7 @@ class Trajectory extends EventEmitter {
             state.Next = catcher.Next;
         }
 
-        async function* retry(retrier, fn, error) {
+        async function* retry(retrier, fn, error, type) {
             let cleared = false;
             emit({
                 type: 'Info',
@@ -214,7 +214,7 @@ class Trajectory extends EventEmitter {
             let i = 0;
             while (i++ < MaxAttempts) {
                 try {
-                    yield* await unsafeAttempt(fn);
+                    yield* await unsafeAttempt(fn, type);
                     cleared = true;
                     let message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
                     emit({
@@ -244,11 +244,11 @@ class Trajectory extends EventEmitter {
             }
         }
 
-        async function* attempt(fn) {
+        async function* attempt(fn, type) {
             try {
-                yield* await unsafeAttempt(fn);
+                yield* await unsafeAttempt(fn, type);
             } catch (error) {
-                yield* await handleError(fn, error);
+                yield* await handleError(fn, error, type);
             }
         }
 
@@ -257,7 +257,7 @@ class Trajectory extends EventEmitter {
 
             yield* state.Type === 'Fail'
                 ? abort(name, state, emit)
-                : attempt(handlers[state.Type]);
+                : attempt(handlers[state.Type], state.Type);
             if (isEnd(state)) return;
 
             next();

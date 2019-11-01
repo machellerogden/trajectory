@@ -55,7 +55,7 @@ class Trajectory extends EventEmitter {
         if (!silent) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data, message, streamed, closed }) {
+    reportHandler({ type, name, data, message, streamed, exited }) {
         this.reporterOptions;
         this.reporter[type.toLowerCase()]({
             name,
@@ -63,7 +63,7 @@ class Trajectory extends EventEmitter {
             data,
             message,
             streamed,
-            closed,
+            exited,
             depth: this.depth,
             options: this.reporterOptions
         });
@@ -140,8 +140,8 @@ class Trajectory extends EventEmitter {
                     byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stderr));
                 }
-                result.on('close', code => code === 0 ? emit({ type: 'stdout', name, closed: true })
-                                                      : emit({ type: 'stderr', name, closed: true }));
+                result.on('exit', code => code === 0 ? emit({ type: 'stdout', name, exited: true })
+                                                      : emit({ type: 'stderr', name, exited: true }));
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }

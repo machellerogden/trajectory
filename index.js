@@ -142,6 +142,7 @@ class Trajectory extends EventEmitter {
                 result.once('exit', (code, signal) => code != 0
                     ? emit({ type: 'stderr', name, closed: true })
                     : emit({ type: 'stdout', name, closed: true }));
+                result.once('error', err => emit({ type: 'stderr', name, data: err.message }))
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }

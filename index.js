@@ -302,7 +302,7 @@ function Handlers(context) {
         async Parallel(state, io) {
             context.depth++;
             const input = fromInput(io);
-            const output = await Promise.all(state.Branches.map(branch => context.executeStateMachine(branch, input)));
+            const output = (await Promise.all(state.Branches.map(branch => context.executeStateMachine(branch, input)))).map(b => b.map(({ data }) => data));
             context.depth--;
             return processOutput(output);
         },

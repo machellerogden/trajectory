@@ -14,7 +14,7 @@ const { sleep, reduceAny, isPromise, isReadableStream } = require('./lib/util');
 const builtInReporter = require('./lib/reporter');
 const { EOL } = require('os');
 const streamToPromise = require('stream-to-promise');
-const { PassThrough } = require('stream');
+const byline = require('byline');
 
 const endStates = new Set([ 'Succeed', 'Fail']);
 const isEnd = state => state.End || endStates.has(state.Type);
@@ -55,13 +55,13 @@ class Trajectory extends EventEmitter {
         if (!silent) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data, message, spawned }) {
+    reportHandler({ type, name, data, message, streamed }) {
         this.reporterOptions;
         this.reporter[type.toLowerCase()]({
             name,
             data,
             message,
-            spawned,
+            streamed,
             depth: this.depth,
             options: this.reporterOptions
         });
@@ -76,8 +76,8 @@ class Trajectory extends EventEmitter {
             const data = results.map(({ data }) => data);
 
             const finalResult = results[results.length - 1];
-            const { data:finalData, spawned:finalSpawned } = finalResult;
-            this.emit('event', { type: 'Final', name: 'final', data: finalData, spawned: finalSpawned });
+            const { data:finalData, streamed:finalStreamed } = finalResult;
+            this.emit('event', { type: 'Final', name: 'final', data: finalData, streamed: finalStreamed });
             this.emit('event', { type: 'Complete', name: 'completed', data })
 
             return [ input, ...data ];
@@ -125,28 +125,25 @@ class Trajectory extends EventEmitter {
         async function* unsafeAttempt(fn) {
             const result = await fn(state, io);
             let data = result;
-            let spawned;
+            let streamed = false;
 
             if (isReadableStream(result.stdout) || isReadableStream(result.stderr)) {
+                streamed = true;
                 let streamPromises = [];
                 if (isReadableStream(result.stdout)) {
-                    spawned = spawned || {};
-                    spawned.stdout = new PassThrough();
-                    result.stdout.pipe(spawned.stdout);
+                    byline(result.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stdout));
                 } else if (isReadableStream(result.stderr)) {
-                    spawned = spawned || {};
-                    spawned.stderr = new PassThrough();
-                    result.stderr.pipe(spawned.stderr);
+                    byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
                     streamPromises.push(streamToPromise(result.stderr));
                 }
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }
 
-            yield { name, data, spawned };
-            emit({ type: 'Info', name, data, spawned });
-            emit({ type: 'Succeed', name, spawned });
+            yield { name, data, streamed };
+            emit({ type: 'Info', name, data, streamed });
+            emit({ type: 'Succeed', name, streamed });
             io = clone(result);
         }
 

@@ -18,6 +18,7 @@
   "license": "MIT",
   "dependencies": {
     "@hapi/joi": "^15.0.3",
+    "byline": "^5.0.0",
     "cancellation-context": "^0.2.10",
     "chalk": "^2.4.2",
     "jsonpath": "^1.0.2",
@@ -25,7 +26,6 @@
     "log-symbols": "^3.0.0",
     "ordinal": "^1.0.3",
     "serialize-error": "^4.1.0",
-    "stream-line-wrapper": "^0.1.1",
     "stream-to-promise": "^2.2.0"
   },
   "devDependencies": {

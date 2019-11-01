@@ -74,6 +74,7 @@ class Trajectory extends EventEmitter {
         try {
             results = await this.executeStateMachine(stateMachine, input);
             const data = results.map(({ data }) => data);
+            //console.log('results:', require('util').inspect(results, { depth: null, colors: true }));
 
             const finalResult = results[results.length - 1];
             const { data:finalData, streamed:finalStreamed } = finalResult;
@@ -302,7 +303,10 @@ function Handlers(context) {
         async Parallel(state, io) {
             context.depth++;
             const input = fromInput(io);
-            const output = (await Promise.all(state.Branches.map(branch => context.executeStateMachine(branch, input)))).map(b => b.map(({ data }) => data));
+            const output = await Promise.all(state.Branches.map(async branch => {
+                const branchResult = await context.executeStateMachine(branch, input);
+                return branchResult.map(({ data }) => data);
+            }));
             context.depth--;
             return processOutput(output);
         },

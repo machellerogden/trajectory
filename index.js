@@ -78,8 +78,8 @@ class Trajectory extends EventEmitter {
             const data = results.map(({ data }) => data);
             //console.log('results:', require('util').inspect(results, { depth: null, colors: true })); 
             const finalResult = results[results.length - 1];
-            const { data:finalData, streamed:finalStreamed } = finalResult;
-            this.emit('event', { type: 'Final', name: 'final', data: finalData, streamed: finalStreamed });
+            const { name:finalName, data:finalData, streamed:finalStreamed } = finalResult;
+            this.emit('event', { type: 'Final', name: finalName, data: finalData, streamed: finalStreamed });
             this.emit('event', { type: 'Complete', name: 'completed', data })
 
             return [ input, ...data ];

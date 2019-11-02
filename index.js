@@ -135,13 +135,11 @@ class Trajectory extends EventEmitter {
 
                 let streamPromises = [];
 
-                if (isReadableStream(attemptResult.stdout)) {
-                    byline(attemptResult.stdout).on('data', (name => line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }))(name));
-                    streamPromises.push(streamToPromise(attemptResult.stdout));
-                } else if (isReadableStream(attemptResult.stderr)) {
-                    byline(attemptResult.stderr).on('data', (name => line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }))(name));
-                    streamPromises.push(streamToPromise(attemptResult.stderr));
-                }
+                byline(attemptResult.stdout).on('data', (name => line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }))(name));
+                streamPromises.push(streamToPromise(attemptResult.stdout));
+
+                byline(attemptResult.stderr).on('data', (name => line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }))(name));
+                streamPromises.push(streamToPromise(attemptResult.stderr));
 
                 const handleExit = name => code =>
                     code === 0 ? emit({ type: 'stdout', name, closed: true, stateType: type })

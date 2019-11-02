@@ -158,7 +158,7 @@ class Trajectory extends EventEmitter {
             emit({ type: 'info', name, data, stateType: type, streamed });
             emit({ type: 'succeed', name, data, stateType: type, streamed });
 
-            io = clone(attemptResult);
+            io = clone(data);
         }
 
         async function* handleError(fn, error, type) {

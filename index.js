@@ -48,19 +48,19 @@ class Trajectory extends EventEmitter {
         this.cc = CancellationContext();
 
         this.reporter = reporter;
-        this.reporterOptions = reporterOptions;
+        this.reporterOptions = { ...reporterOptions, debug };
         this.depth = 0;
 
         this.silent = silent;
         if (!silent) this.on('event', this.reportHandler);
     }
 
-    reportHandler({ type, name, data, message, streamed, closed }) {
+    reportHandler({ type, stateType, name, data, message, streamed, closed }) {
         this.reporterOptions;
-        this.reporter[type.toLowerCase()]({
+        this.reporter[type]({
             name,
             data,
-            data,
+            stateType,
             message,
             streamed,
             closed,
@@ -72,15 +72,14 @@ class Trajectory extends EventEmitter {
     async execute(stateMachineDefinition, rawInput = {}) {
         const stateMachine = await stateMachineSchema.validate(stateMachineDefinition);
         const input = await inputSchema.validate(rawInput);
-        let results;
         try {
-            results = await this.executeStateMachine(stateMachine, input);
+            const results = await this.executeStateMachine(stateMachine, input);
+
             const data = results.map(({ data }) => data);
-            //console.log('results:', require('util').inspect(results, { depth: null, colors: true })); 
-            const finalResult = results[results.length - 1];
-            const { name:finalName, data:finalData, streamed:finalStreamed } = finalResult;
-            this.emit('event', { type: 'Final', name: finalName, data: finalData, streamed: finalStreamed });
-            this.emit('event', { type: 'Complete', name: 'completed', data })
+            const final = results[results.length - 1];
+            this.emit('event', { ...final, type: 'final' });
+
+            this.emit('event', { type: 'complete', name: 'completed', stateType: 'Done', data })
 
             return [ input, ...data ];
         } catch (e) {
@@ -93,19 +92,19 @@ class Trajectory extends EventEmitter {
     async executeStateMachine(stateMachine, input) {
         const results = [];
         const scheduleIterator = this.schedule(stateMachine, clone(input));
+
         for await (const result of scheduleIterator) {
             await inputSchema.validate(result.data);
             results.push(result);
         }
+
         return results;
     }
 
     async* schedule(stateMachine, io) {
         const { StartAt, States } = stateMachine;
 
-        if (States == null || States[StartAt] == null) {
-            throw new Error(`Unable to resolve state "${StartAt}".`);
-        }
+        if (States == null || States[StartAt] == null) throw new Error(`Unable to resolve state "${StartAt}".`);
 
         const context = this;
 
@@ -125,40 +124,40 @@ class Trajectory extends EventEmitter {
         const handlers = Handlers(context);
 
         async function* unsafeAttempt(fn, type) {
-            const result = await fn(state, io);
-            let data = result;
+            const fnResult = await fn(state, io);
+            let data = fnResult;
             let streamed = false;
 
-            if (type !== 'parallel' && (isReadableStream(result.stdout) || isReadableStream(result.stderr))) {
+            if (type !== 'parallel' && (isReadableStream(fnResult.stdout) || isReadableStream(fnResult.stderr))) {
                 streamed = true;
                 let streamPromises = [];
-                if (isReadableStream(result.stdout)) {
-                    byline(result.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString() }));
-                    streamPromises.push(streamToPromise(result.stdout));
-                } else if (isReadableStream(result.stderr)) {
-                    byline(result.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString() }));
-                    streamPromises.push(streamToPromise(result.stderr));
+                if (isReadableStream(fnResult.stdout)) {
+                    byline(fnResult.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }));
+                    streamPromises.push(streamToPromise(fnResult.stdout));
+                } else if (isReadableStream(fnResult.stderr)) {
+                    byline(fnResult.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }));
+                    streamPromises.push(streamToPromise(fnResult.stderr));
                 }
-                result.once('exit', (code, signal) => code != 0
-                    ? emit({ type: 'stderr', name, closed: true })
-                    : emit({ type: 'stdout', name, closed: true }));
-                result.once('error', err => emit({ type: 'stderr', name, data: err.message }))
+                fnResult.once('exit', (code, signal) => code != 0
+                    ? emit({ type: 'stderr', name, closed: true, stateType: type })
+                    : emit({ type: 'stdout', name, closed: true, stateType: type }));
+                fnResult.once('error', err => emit({ type: 'stderr', name, data: err.message, stateType: type }))
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }
 
-            yield { name, data, streamed };
-            emit({ type: 'Info', name, data, streamed });
-            emit({ type: 'Succeed', name, streamed });
-            io = clone(result);
+            const result = { name, data, stateType: type, streamed };
+
+            yield result;
+            emit({ ...result, type: 'info' });
+            emit({ ...result, type: 'succeed' });
+
+            io = clone(fnResult);
         }
 
         async function* handleError(fn, error, type) {
-            emit({
-                type: 'Info',
-                name,
-                message: `"${name}" failed with error "${error.message || JSON.stringify(error)}".`
-            });
+            const message = `"${name}" failed with error "${error.message || JSON.stringify(error)}".`;
+            emit({ type: 'info', name, message, stateType: type });
             const findError = createErrorFinder(error);
             const retrier = (state.Retry || []).find(findError);
             const catcher = (state.Catch || []).find(findError);
@@ -170,7 +169,7 @@ class Trajectory extends EventEmitter {
                         yield* await catchError(catcher, fn, retryError, type);
                     } else {
                         yield { name, data: retryError };
-                        emit({ type: 'Error', name, data: retryError });
+                        emit({ type: 'error', name, data: retryError, stateType: type });
                         throw retryError;
                     }
                 }
@@ -178,34 +177,28 @@ class Trajectory extends EventEmitter {
                 yield* await catchError(catcher, fn, error, type);
             } else {
                 yield { name, data: error };
-                emit({ type: 'Error', name, data: error });
+                emit({ type: 'error', name, data: error, stateType: type });
                 throw error;
             }
         }
 
         async function* catchError(catcher, fn, error, type) {
-            emit({
-                type: 'Info',
-                name,
-                message: `Catching error in "${name}"`
-            });
+            const message = `Catching error in "${name}"`;
+            emit({ type: 'info', name, message, stateType: type });
             const errorOutput = catcher.ResultPath != null
                 ? set(clone(io), asPath(catcher.ResultPath), { error: error })
                 : { error };
             yield { name, data: errorOutput };
             io = clone(errorOutput);
-            emit({ type: 'Error', name, data: errorOutput });
+            emit({ type: 'error', name, data: errorOutput, stateType: type });
             delete state.End;
             state.Next = catcher.Next;
         }
 
         async function* retry(retrier, fn, error, type) {
             let cleared = false;
-            emit({
-                type: 'Info',
-                name,
-                message: `Retrying "${name}" after error`
-            });
+            let message = `Retrying "${name}" after error`;
+            emit({ type: 'info', name, message, stateType: type });
             let {
                 IntervalSeconds = 0,
                 BackoffRate = 1,
@@ -216,21 +209,13 @@ class Trajectory extends EventEmitter {
                 try {
                     yield* await unsafeAttempt(fn, type);
                     cleared = true;
-                    let message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
-                    emit({
-                        type: 'Info',
-                        name,
-                        message
-                    });
+                    message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
+                    emit({ type: 'info', name, message, stateType: type });
                     break;
                 } catch (e) {
-                    let message = `Retry of ${state.Type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${MaxAttempts}.`;
+                    message = `Retry of ${state.Type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${MaxAttempts}.`;
                     if (IntervalSeconds > 0 && i < MaxAttempts) message += `\nWill try again in ${IntervalSeconds * BackoffRate} seconds.`;
-                    emit({
-                        type: 'Info',
-                        name,
-                        message
-                    });
+                    emit({ type: 'info', name, message, stateType: type });
                     if (IntervalSeconds) {
                         await sleep(IntervalSeconds);
                         IntervalSeconds *= BackoffRate;
@@ -239,7 +224,7 @@ class Trajectory extends EventEmitter {
             }
             if (!cleared) {
                 yield { name, data: error };
-                emit({ type: 'Error', name, data: error });
+                emit({ type: 'error', name, data: error, stateType: type });
                 throw error;
             }
         }
@@ -253,7 +238,7 @@ class Trajectory extends EventEmitter {
         }
 
         while (true) {
-            emit({ type: 'Start', name });
+            emit({ type: 'start', name, stateType: state.Type });
 
             yield* state.Type === 'Fail'
                 ? abort(name, state, emit)
@@ -272,7 +257,7 @@ function* abort(name, state, emit) {
     if (error) errMsg.push(error);
     if (cause) errMsg.push(cause);
     yield { name, data };
-    emit({ type, name, data });
+    emit({ type: Type.toLowerCase(), name, data });
     throw new Error(errMsg.join(': '));
 }
 

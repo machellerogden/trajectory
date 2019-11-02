@@ -124,35 +124,41 @@ class Trajectory extends EventEmitter {
         const handlers = Handlers(context);
 
         async function* unsafeAttempt(fn, type) {
-            const fnResult = await fn(state, io);
-            let data = fnResult;
+            const attemptResult = await fn(state, io);
+            let data = attemptResult;
+
             let streamed = false;
 
-            if (type !== 'parallel' && (isReadableStream(fnResult.stdout) || isReadableStream(fnResult.stderr))) {
+            if (type != 'Parallel' && attemptResult && attemptResult.constructor.name === 'ChildProcess') {
+
                 streamed = true;
+
                 let streamPromises = [];
-                if (isReadableStream(fnResult.stdout)) {
-                    byline(fnResult.stdout).on('data', line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }));
-                    streamPromises.push(streamToPromise(fnResult.stdout));
-                } else if (isReadableStream(fnResult.stderr)) {
-                    byline(fnResult.stderr).on('data', line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }));
-                    streamPromises.push(streamToPromise(fnResult.stderr));
+
+                if (isReadableStream(attemptResult.stdout)) {
+                    byline(attemptResult.stdout).on('data', (name => line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }))(name));
+                    streamPromises.push(streamToPromise(attemptResult.stdout));
+                } else if (isReadableStream(attemptResult.stderr)) {
+                    byline(attemptResult.stderr).on('data', (name => line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }))(name));
+                    streamPromises.push(streamToPromise(attemptResult.stderr));
                 }
-                fnResult.once('exit', (code, signal) => code != 0
-                    ? emit({ type: 'stderr', name, closed: true, stateType: type })
-                    : emit({ type: 'stdout', name, closed: true, stateType: type }));
-                fnResult.once('error', err => emit({ type: 'stderr', name, data: err.message, stateType: type }))
+
+                const handleExit = name => code =>
+                    code === 0 ? emit({ type: 'stdout', name, closed: true, stateType: type })
+                  : code >= 0  ? emit({ type: 'stderr', name, closed: true, stateType: type })
+                  :              void 0;
+                attemptResult.on('exit', handleExit(name));
+                attemptResult.on('error', (name => err => emit({ type: 'stderr', name, data: err.message, stateType: type }))(name));
+
                 const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
                 data = `${out}${out && err ? EOL : ''}${err}`;
             }
 
-            const result = { name, data, stateType: type, streamed };
+            yield { name, data, stateType: type, streamed };
+            emit({ type: 'info', name, data, stateType: type, streamed });
+            emit({ type: 'succeed', name, data, stateType: type, streamed });
 
-            yield result;
-            emit({ ...result, type: 'info' });
-            emit({ ...result, type: 'succeed' });
-
-            io = clone(fnResult);
+            io = clone(attemptResult);
         }
 
         async function* handleError(fn, error, type) {

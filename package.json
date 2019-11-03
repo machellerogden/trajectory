@@ -1,10 +1,11 @@
 {
   "name": "trajectory",
+  "type": "module",
   "version": "0.4.1",
   "description": "A workflow orchestration framework",
-  "main": "index.mjs",
+  "main": "index.js",
   "scripts": {
-    "test": "ava test/*.spec.mjs",
+    "test": "ava test/*.spec.js",
     "watch": "npm run test -- --watch"
   },
   "repository": {
@@ -22,7 +23,7 @@
     "cancellation-context": "^0.2.10",
     "chalk": "^2.4.2",
     "jsonpath": "^1.0.2",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.15",
     "log-symbols": "^3.0.0",
     "ordinal": "^1.0.3",
     "serialize-error": "^4.1.0",
@@ -30,21 +31,14 @@
   },
   "devDependencies": {
     "ava": "^1.4.1",
-    "esm": "^3.2.25",
     "pre-commit": "^1.2.2",
     "sinon": "^7.3.2"
   },
-  "ava": {
-    "require": [
-      "esm"
-    ],
-    "babel": false,
-    "extensions": [
-      "js",
-      "mjs"
-    ]
-  },
   "pre-commit": [
     "test"
-  ]
+  ],
+  "engines": {
+    "node": ">=12.0.0",
+    "npm": ">=5.0.0"
+  }
 }

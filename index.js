@@ -1,24 +1,24 @@
 'use strict';
 
-import byline from 'byline';
-import CancellationContext from 'cancellation-context';
-import { ChildProcess } from 'child_process';
-import { EventEmitter } from 'events';
-import clone from 'lodash/cloneDeep';
-import set from 'lodash/set';
-import compose from 'lodash/fp/compose';
-import ordinal from 'ordinal';
-import { EOL } from 'os';
-import serializeError from 'serialize-error';
-import streamToPromise from 'stream-to-promise';
-import { Handlers } from './lib/handlers';
-import { isEnd, FindError, abort } from './lib/helpers';
-import { asPath } from './lib/io';
-import builtInReporter from './lib/reporter';
-import { stateMachineSchema, optionsSchema, inputSchema } from './lib/schema';
-import { sleep } from './lib/util';
+const byline = require('byline');
+const CancellationContext = require('cancellation-context');
+const { ChildProcess } = require('child_process');
+const { EventEmitter } = require('events');
+const clone = require('lodash/cloneDeep');
+const set = require('lodash/set');
+const compose = require('lodash/fp/compose');
+const ordinal = require('ordinal');
+const { EOL } = require('os');
+const serializeError = require('serialize-error');
+const streamToPromise = require('stream-to-promise');
+const { Handlers } = require('./lib/handlers');
+const { isEnd, FindError, abort } = require('./lib/helpers');
+const { asPath } = require('./lib/io');
+const  builtInReporter = require('./lib/reporter');
+const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
+const { sleep } = require('./lib/util');
 
-export class Trajectory extends EventEmitter {
+class Trajectory extends EventEmitter {
 
     constructor(opts = {}) {
         const {
@@ -248,3 +248,7 @@ export class Trajectory extends EventEmitter {
         }
     }
 }
+
+module.exports = {
+    Trajectory
+};

@@ -2,7 +2,7 @@
 
 import test from 'ava';
 import sinon from 'sinon';
-import { Trajectory } from '../index.mjs';
+import { Trajectory } from '..';
 
 const testOptions = { silent: true };
 

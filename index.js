@@ -10,7 +10,6 @@ const compose = require('lodash/fp/compose');
 const ordinal = require('ordinal');
 const { EOL } = require('os');
 const serializeError = require('serialize-error');
-const streamToPromise = require('stream-to-promise');
 const { Handlers } = require('./lib/handlers');
 const { isEnd, FindError, abort } = require('./lib/helpers');
 const { asPath } = require('./lib/io');
@@ -128,23 +127,33 @@ class Trajectory extends EventEmitter {
 
                 streamed = true;
 
-                let streamPromises = [];
-
-                byline(attemptResult.stdout).on('data', (name => line => emit({ type: 'stdout', name, data: line.toString(), stateType: type }))(name));
-                streamPromises.push(streamToPromise(attemptResult.stdout));
-
-                byline(attemptResult.stderr).on('data', (name => line => emit({ type: 'stderr', name, data: line.toString(), stateType: type }))(name));
-                streamPromises.push(streamToPromise(attemptResult.stderr));
-
-                const handleExit = name => code =>
+                const handleExit = (name, type, code) =>
                     code === 0 ? emit({ type: 'stdout', name, closed: true, stateType: type })
                   : code >= 0  ? emit({ type: 'stderr', name, closed: true, stateType: type })
                   :              void 0;
-                attemptResult.on('exit', handleExit(name));
-                attemptResult.on('error', (name => err => emit({ type: 'stderr', name, data: err.message, stateType: type }))(name));
 
-                const [ out = '', err = '' ] = (await Promise.all(streamPromises)).map(s => s.toString().trimRight());
-                data = `${out}${out && err ? EOL : ''}${err}`;
+                const streamPromise = new Promise((resolve, reject) => {
+                    let data = '';
+                    byline(attemptResult.stdout).on('data', ((name, type) => line => {
+                        emit({ type: 'stdout', name, data: line.toString(), stateType: type });
+                        data += line;
+                    })(name, type));
+                    byline(attemptResult.stderr).on('data', ((name, type) => line => {
+                        emit({ type: 'stderr', name, data: line.toString(), stateType: type });
+                        data += line;
+                    })(name, type));
+                    attemptResult.on('exit', ((name, type) => code => {
+                        handleExit(name, type, code);
+                        if (code != 0) return reject(new Error(`process exited with status code \`${code}\``));
+                        return resolve(data);
+                    })(name, type));
+                    attemptResult.on('error', ((name, type) => error => {
+                        emit({ type: 'stderr', name, data: err.message, stateType: type });
+                        return reject(error);
+                    })(name, type));
+                });
+
+                data  = (await streamPromise).toString().trimRight();
             }
 
             yield { name, data, stateType: type, streamed };

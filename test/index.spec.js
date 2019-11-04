@@ -672,3 +672,107 @@ test('params tests - 1', async t => {
     const results = await run();
     t.deepEqual(results[1], {foo:"bar"});
 });
+
+test.skip('nested parallel', async t => {
+    const makeThisPass = {
+        "StartAt": "a",
+        "States": {
+            "a": {
+                "Type": "Parallel",
+                "Branches": [
+                    {
+                        "StartAt": "lein.clean",
+                        "States": {
+                            "lein.clean": {
+                                "Type": "Task",
+                                "Resource": "lein.clean",
+                                "Next": "lein.deps"
+                            },
+                            "lein.deps": {
+                                "Type": "Task",
+                                "Resource": "lein.deps",
+                                "Next": "lein.npm.install"
+                            },
+                            "lein.npm.install": {
+                                "Type": "Task",
+                                "Resource": "lein.npm.install",
+                                "Next": "parallel_0"
+                            },
+                            "parallel_0": {
+                                "Type": "Parallel",
+                                "Branches": [
+                                    {
+                                        "StartAt": "lein_0",
+                                        "States": {
+                                            "lein_0": {
+                                                "Type": "Task",
+                                                "Parameters": {
+                                                    "alias": "apple"
+                                                },
+                                                "Resource": "lein",
+                                                "End": true
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "StartAt": "lein_1",
+                                        "States": {
+                                            "lein_1": {
+                                                "Type": "Task",
+                                                "Parameters": {
+                                                    "alias": "banana"
+                                                },
+                                                "Resource": "lein",
+                                                "End": true
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "StartAt": "lein_2",
+                                        "States": {
+                                            "lein_2": {
+                                                "Type": "Task",
+                                                "Parameters": {
+                                                    "alias": "cantaloupe"
+                                                },
+                                                "Resource": "lein",
+                                                "End": true
+                                            }
+                                        }
+                                    }
+                                ],
+                                "Next": "choice_0"
+                            },
+                            "choice_0": {
+                                "Type": "Choice",
+                                "Choices": [
+                                    {
+                                        "BooleanEquals": true,
+                                        "Next": "sls.deploy"
+                                    }
+                                ],
+                                "Default": "skip-deploy"
+                            },
+                            "sls.deploy": {
+                                "Type": "Task",
+                                "Resource": "sls.deploy",
+                                "Parameters": {
+                                    "deploy": {
+                                        "s": "stage"
+                                    }
+                                },
+                                "End": true
+                            },
+                            "skip-deploy": {
+                                "Type": "Pass",
+                                "End": true
+                            }
+                        }
+                    }
+                ],
+                "OutputPath": "$.0[-1:]",
+                "End": true
+            }
+        }
+    };
+});

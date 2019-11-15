@@ -776,3 +776,35 @@ test.skip('nested parallel', async t => {
         }
     };
 });
+
+test('smart params', async t => {
+    async function run() {
+        const definition = {
+            "StartAt": "pass_0",
+            "States": {
+                "pass_0": {
+                    "Type": "Pass",
+                    "Parameters": {
+                        "a": "foo",
+                        "b": "bar"
+                    },
+                    "Next": "pass_1"
+                },
+                "pass_1": {
+                    "Type": "Pass",
+                    "Parameters": [
+                        "$.a",
+                        "$.b"
+                    ],
+                    "End": true
+                }
+            }
+        };
+        const trajectory = new Trajectory(testOptions);
+        return await trajectory.execute(definition, {});
+    }
+    const results = await run();
+    t.deepEqual(results[results.length - 1], [ "foo", "bar" ]);
+});
+
+

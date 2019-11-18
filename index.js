@@ -136,11 +136,11 @@ class Trajectory extends EventEmitter {
                     let data = '';
                     byline(attemptResult.stdout).on('data', ((name, type) => line => {
                         emit({ type: 'stdout', name, data: line.toString(), stateType: type });
-                        data += line;
+                        data += `${line}${EOL}`;
                     })(name, type));
                     byline(attemptResult.stderr).on('data', ((name, type) => line => {
                         emit({ type: 'stderr', name, data: line.toString(), stateType: type });
-                        data += line;
+                        data += `${line}${EOL}`;
                     })(name, type));
                     attemptResult.on('exit', ((name, type) => code => {
                         handleExit(name, type, code);

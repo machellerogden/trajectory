@@ -1,6 +1,5 @@
 {
   "name": "trajectory",
-  "type": "module",
   "version": "0.5.7",
   "description": "A workflow orchestration framework",
   "main": "index.js",

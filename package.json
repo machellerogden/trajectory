@@ -1,6 +1,6 @@
 {
   "name": "trajectory",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "description": "A workflow orchestration framework",
   "main": "index.js",
   "scripts": {

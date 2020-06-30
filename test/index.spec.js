@@ -1,8 +1,8 @@
 'use strict';
 
-import test from 'ava';
-import sinon from 'sinon';
-import { Trajectory } from '..';
+const test = require('ava');
+const sinon = require('sinon');
+const { Trajectory } = require('..');
 
 const testOptions = { silent: true };
 

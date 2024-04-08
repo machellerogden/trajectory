@@ -1,0 +1,80 @@
+{
+  "StartAt": "PrepareInput",
+  "States": {
+    "PrepareInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "order.$": "$"
+      },
+      "Next": "ValidateOrder"
+    },
+    "ValidateOrder": {
+      "Type": "Task",
+      "Handler": "validateOrder",
+      "InputPath": "$.order",
+      "ResultPath": "$.order",
+      "Next": "ProcessPayment"
+    },
+    "ProcessPayment": {
+      "Type": "Task",
+      "Handler": "processPayment",
+      "InputPath": "$.order",
+      "ResultPath": "$.paymentResult",
+      "Next": "IsPaymentSuccessful"
+    },
+    "IsPaymentSuccessful": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.paymentResult.success",
+          "BooleanEquals": true,
+          "Next": "CheckStock"
+        }
+      ],
+      "Default": "CancelOrder"
+    },
+    "CheckStock": {
+      "Type": "Task",
+      "Handler": "checkStock",
+      "InputPath": "$.order",
+      "ResultPath": "$.stockCheckResult",
+      "Next": "IsStockAvailable"
+    },
+    "IsStockAvailable": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.stockCheckResult.available",
+          "BooleanEquals": true,
+          "Next": "ShipOrder"
+        }
+      ],
+      "Default": "NotifyOutOfStock"
+    },
+    "ShipOrder": {
+      "Type": "Task",
+      "Handler": "shipOrder",
+      "InputPath": "$.order",
+      "ResultPath": "$.shippingInfo",
+      "Next": "OrderComplete"
+    },
+    "NotifyOutOfStock": {
+      "Type": "Task",
+      "Handler": "notifyOutOfStock",
+      "InputPath": "$.order",
+      "End": true
+    },
+    "CancelOrder": {
+      "Type": "Task",
+      "Handler": "cancelOrder",
+      "InputPath": "$.order",
+      "ResultPath": "$.cancelationInfo",
+      "End": true
+    },
+    "OrderComplete": {
+      "Type": "Pass",
+      "Result": "Order has been successfully processed and shipped.",
+      "End": true
+    }
+  }
+}

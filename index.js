@@ -1,263 +1,401 @@
-'use strict';
+import { withEffects, fx } from 'with-effects';
+import { JSONPathQuery, JSONPathParts, applyPath, assocPath, applyDataTemplate } from './lib/io.js';
+import { StateMachine as StateMachineSchema } from './lib/schema.js';
+import { findChoice } from './lib/rules.js';
+import { compose, sleep } from './lib/utils.js';
+import { logMachineInfo, logMachineSucceed, logMachineFail, logStateInfo, logStateSucceed, logStateFail } from './lib/log.js';
+import Joi from 'joi';
+import { STATUS, STATE } from './lib/constants.js';
 
-const byline = require('byline');
-const CancellationContext = require('cancellation-context');
-const { ChildProcess } = require('child_process');
-const { EventEmitter } = require('events');
-const clone = require('lodash/cloneDeep');
-const set = require('lodash/set');
-const compose = require('lodash/fp/compose');
-const ordinal = require('ordinal');
-const { EOL } = require('os');
-const serializeError = require('serialize-error');
-const { Handlers } = require('./lib/handlers');
-const { isEnd, FindError, abort } = require('./lib/helpers');
-const { asPath } = require('./lib/io');
-const  builtInReporter = require('./lib/reporter');
-const { stateMachineSchema, optionsSchema, inputSchema } = require('./lib/schema');
-const { sleep } = require('./lib/util');
+async function* StateTransition(States, stateKey, input) {
+    if (!(stateKey in States)) throw new Error(`Unhandled state: ${stateKey}`);
+    const state = States[stateKey];
 
-class Trajectory extends EventEmitter {
+    yield fx('InitializeState', stateKey, state, input);
 
-    constructor(opts = {}) {
-        const {
-            error:optionsError,
-            value:options
-        } = optionsSchema.validate(opts);
+    let status;
+    let handlerInput = input;
+    let output;
 
-        if (optionsError) throw new Error(optionsError);
-
-        const {
-            debug = false,
-            silent = false,
-            reporter = builtInReporter,
-            reporterOptions = {},
-            resources = {}
-        } = options;
-
-        super();
-
-        this.resources = resources;
-
-        this.cc = CancellationContext();
-
-        this.reporter = reporter;
-        this.reporterOptions = { ...reporterOptions, debug };
-        this.depth = 0;
-
-        this.silent = silent;
-        if (!silent) this.on('event', this.reportHandler);
+    if (state.InputPath) {
+        [ status, handlerInput ] = yield fx('ProcessInputPath', input);
+        yield fx('StateInfo', 'InputPath', state.InputPath, handlerInput);
     }
 
-    reportHandler({ type, stateType, name, data, message, streamed, closed }) {
-        this.reporterOptions;
-        this.reporter[type]({
-            name,
-            data,
-            stateType,
-            message,
-            streamed,
-            closed,
-            depth: this.depth,
-            options: this.reporterOptions
-        });
+    if (state.Parameters) {
+        [ status, handlerInput ] = yield fx('ProcessParameters', handlerInput);
+        yield fx('StateInfo', 'Parameters', state.Parameters, handlerInput);
     }
 
-    async execute(stateMachineDefinition, rawInput = {}) {
-        const stateMachine = await stateMachineSchema.validate(stateMachineDefinition);
-        const input = await inputSchema.validate(rawInput);
+    yield fx('StateInfo', 'StateEntered', handlerInput);
+
+    yield fx('StateInfo', 'HandlerStarted', handlerInput);
+
+    [ status, output ] = yield fx('ExecuteHandler', handlerInput);
+
+    if (status == STATUS.ERROR) {
+        yield fx('StateFail', 'HandlerFailed', output);
+    } else {
+        yield fx('StateSucceed', 'HandlerSucceeded', output);
+    }
+
+
+    if (state.ResultSelector) {
+        [ status, output ] = yield fx('ProcessResultSelector', output);
+        yield fx('StateInfo', 'ResultSelector', state.ResultSelector, output);
+    }
+
+    if (state.ResultPath) {
+        [ status, output ] = yield fx('ProcessResultPath', input, output);
+        yield fx('StateInfo', 'ResultPath', state.ResultPath, output);
+    }
+
+    if (state.OutputPath) {
+        [ status, output ] = yield fx('ProcessOutputPath', output);
+        yield fx('StateInfo', 'OutputPath', state.OutputPath, output);
+    }
+
+    yield fx('StateInfo', 'StateExited', output);
+
+    let Next = state.Next;
+
+    if (status == STATUS.ERROR) {
+        Next = STATE.FAILED;
+    } else if (state.End || Next == null) {
+        Next = STATE.SUCCEEDED;
+    }
+
+    return [ Next, output ];
+}
+
+async function* StateMachine(machineDef, io) {
+    let stateKey = machineDef.StartAt;
+    const States = machineDef.States;
+
+    yield fx('MachineStart', io);
+
+    while (![ STATE.FAILED, STATE.SUCCEEDED ].includes(stateKey)) {
+        [ stateKey, io ] = yield* StateTransition(States, stateKey, io);
+    }
+
+    if (stateKey == STATE.FAILED) {
+        yield fx('MachineFail', io);
+    } else {
+        yield fx('MachineSucceed', io);
+    }
+
+    return [ stateKey, io ];
+}
+
+const executionHandlers = {
+
+    async Pass(context, input) {
+        const state = context.state;
+
+        return [ STATUS.OK, state.Result ?? input ];
+    },
+
+    async Task(context, input) {
+        const state = context.state;
+
         try {
-            const results = await this.executeStateMachine(stateMachine, input);
+            const result = await context.handlers[state.Handler](input);
 
-            const data = results.map(({ data }) => data);
-            const final = results[results.length - 1];
-            this.emit('event', { ...final, type: 'final' });
-
-            this.emit('event', { type: 'complete', name: 'completed', stateType: 'Done', data })
-
-            return [ input, ...data ];
-        } catch (e) {
-            const { stack } = serializeError(e);
-            console.error(stack);
-            this.cc.cancelAll();
+            return [ STATUS.OK, result ];
+        } catch (error) {
+            return [ STATUS.ERROR, error ];
         }
-    }
+    },
 
-    async executeStateMachine(stateMachine, input) {
-        const results = [];
-        const scheduleIterator = this.schedule(stateMachine, clone(input));
+    async Parallel(context, input) {
+        const state = context.state;
 
-        for await (const result of scheduleIterator) {
-            await inputSchema.validate(result.data);
-            results.push(result);
-        }
+        try {
 
-        return results;
-    }
+            context.depth++;
 
-    async* schedule(stateMachine, io) {
-        const { StartAt, States } = stateMachine;
-
-        if (States == null || States[StartAt] == null) throw new Error(`Unable to resolve state "${StartAt}".`);
-
-        const context = this;
-
-        const emit = event => this.emit('event', event);
-
-        let name = StartAt;
-        let state = States[StartAt];
-
-        const next = () => {
-            name = state.Next;
-            state = States[state.Next];
-        };
-
-        this.getIO = () => clone(io);
-        this.getState = () => state;
-
-        const handlers = Handlers(context);
-
-        async function* unsafeAttempt(fn, type) {
-            const attemptResult = await fn(state, io);
-            let data = attemptResult;
-
-            let streamed = false;
-
-            if (type != 'Parallel' && attemptResult instanceof ChildProcess) {
-
-                streamed = true;
-
-                const handleExit = (name, type, code) =>
-                    code === 0 ? emit({ type: 'stdout', name, closed: true, stateType: type })
-                  : code >= 0  ? emit({ type: 'stderr', name, closed: true, stateType: type })
-                  :              void 0;
-
-                const streamPromise = new Promise((resolve, reject) => {
-                    let data = '';
-                    byline(attemptResult.stdout).on('data', ((name, type) => line => {
-                        emit({ type: 'stdout', name, data: line.toString(), stateType: type });
-                        data += `${line}${EOL}`;
-                    })(name, type));
-                    byline(attemptResult.stderr).on('data', ((name, type) => line => {
-                        emit({ type: 'stderr', name, data: line.toString(), stateType: type });
-                        data += `${line}${EOL}`;
-                    })(name, type));
-                    attemptResult.on('exit', ((name, type) => code => {
-                        handleExit(name, type, code);
-                        if (code != 0) return reject(new Error(`process exited with status code \`${code}\``));
-                        return resolve(data);
-                    })(name, type));
-                    attemptResult.on('error', ((name, type) => error => {
-                        emit({ type: 'stderr', name, data: err.message, stateType: type });
-                        return reject(error);
-                    })(name, type));
-                });
-
-                data  = (await streamPromise).toString().trimRight();
-            }
-
-            yield { name, data, stateType: type, streamed };
-            emit({ type: 'info', name, data, stateType: type, streamed });
-            emit({ type: 'succeed', name, data, stateType: type, streamed });
-
-            io = clone(data);
-        }
-
-        async function* handleError(fn, error, type) {
-            const message = `"${name}" failed with error "${error.message || JSON.stringify(error)}".`;
-            emit({ type: 'info', name, message, stateType: type });
-            const findError = FindError(error);
-            const retrier = (state.Retry || []).find(findError);
-            const catcher = (state.Catch || []).find(findError);
-            if (retrier) {
+            let result = await Promise.all(state.Branches.map(async branch => {
                 try {
-                    yield* await retry(retrier, fn, error, type);
-                } catch (retryError) {
-                    if (catcher) {
-                        yield* await catchError(catcher, fn, retryError, type);
-                    } else {
-                        yield { name, data: retryError };
-                        emit({ type: 'error', name, data: retryError, stateType: type });
-                        throw retryError;
+                    const [ finalState, output ] = await executeMachine(branch, context, input);
+
+                    if (finalState == STATE.FAILED) {
+                        return [ STATUS.ERROR, output ];
                     }
+                    return [ STATUS.OK, output ];
+                } catch (error) {
+                    return [ STATUS.ERROR, error ];
                 }
-            } else if (catcher) {
-                yield* await catchError(catcher, fn, error, type);
-            } else {
-                yield { name, data: error };
-                emit({ type: 'error', name, data: error, stateType: type });
-                throw error;
+            }));
+
+            context.depth--;
+
+            const errors = result.filter(([ status ]) => status == STATUS.ERROR).map(([_, error ]) => error);
+
+            if (errors.length > 0) {
+                return [ STATUS.ERROR, errors ];
             }
+
+            result = result.map(([_, output]) => output);
+
+            return [ STATUS.OK, result ];
+        } catch (error) {
+            return [ STATUS.ERROR, error ];
+        }
+    },
+    async Choice(context, input) {
+        const state = context.state;
+        const choice = findChoice(state.Choices, input);
+        const Next = choice == null
+            ? state.Default
+            : choice.Next;
+
+        if (Next == null) throw new Error(`no where to go`);
+
+        delete state.End;
+        state.Next = Next;
+
+        return [ STATUS.OK, input ];
+    },
+    async Succeed(context, input) {
+        return [ STATUS.OK, input ];
+    },
+    async Fail(context, error) {
+        return [ STATUS.ERROR, error ];
+    },
+    async Wait(context, input) {
+        const state = context.state;
+        let delay = 0;
+
+        if (state.Seconds != null) {
+            delay = state.Seconds * 1000;
+        } else if (state.SecondsPath != null) {
+            delay = JSONPathQuery(state.SecondsPath, input) * 1000;
+        } else if (state.TimestampPath != null) {
+            const timestamp = JSONPathQuery(state.TimestampPath, input);
+            delay = new Date(timestamp) - Date.now();
+        } else if (state.Timestamp != null) {
+            delay = new Date(state.Timestamp) - Date.now();
         }
 
-        async function* catchError(catcher, fn, error, type) {
-            const message = `Catching error in "${name}"`;
-            emit({ type: 'info', name, message, stateType: type });
-            const errorOutput = catcher.ResultPath != null
-                ? set(clone(io), asPath(catcher.ResultPath), { error: error })
-                : { error };
-            yield { name, data: errorOutput };
-            io = clone(errorOutput);
-            emit({ type: 'error', name, data: errorOutput, stateType: type });
-            delete state.End;
-            state.Next = catcher.Next;
-        }
+        await sleep(delay);
 
-        async function* retry(retrier, fn, error, type) {
-            let cleared = false;
-            let message = `Retrying "${name}" after error`;
-            emit({ type: 'info', name, message, stateType: type });
-            let {
-                IntervalSeconds = 0,
-                BackoffRate = 1,
-                MaxAttempts = 1
-            } = retrier;
-            let i = 0;
-            while (i++ < MaxAttempts) {
-                try {
-                    yield* await unsafeAttempt(fn, type);
-                    cleared = true;
-                    message = `Retry of ${state.Type} state "${name}" succeeded on ${ordinal(i)} attempt.`;
-                    emit({ type: 'info', name, message, stateType: type });
-                    break;
-                } catch (e) {
-                    message = `Retry of ${state.Type} state "${name}" failed with error "${e.message}".\nAttempt ${i} of ${MaxAttempts}.`;
-                    if (IntervalSeconds > 0 && i < MaxAttempts) message += `\nWill try again in ${IntervalSeconds * BackoffRate} seconds.`;
-                    emit({ type: 'info', name, message, stateType: type });
-                    if (IntervalSeconds) {
-                        await sleep(IntervalSeconds);
-                        IntervalSeconds *= BackoffRate;
-                    }
-                }
-            }
-            if (!cleared) {
-                yield { name, data: error };
-                emit({ type: 'error', name, data: error, stateType: type });
-                throw error;
-            }
-        }
+        return [ STATUS.OK, input ];
+    }
+};
 
-        async function* attempt(fn, type) {
-            try {
-                yield* await unsafeAttempt(fn, type);
-            } catch (error) {
-                yield* await handleError(fn, error, type);
-            }
-        }
-
-        while (true) {
-            emit({ type: 'start', name, stateType: state.Type });
-
-            yield* state.Type === 'Fail'
-                ? abort(name, state, emit)
-                : attempt(handlers[state.Type], state.Type);
-            if (isEnd(state)) return;
-
-            next();
-        }
+function selectInputPath(context, input) {
+    const { state } = context;
+    try {
+        input = applyPath(state.InputPath, input);
+        return [ STATUS.OK, input ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
     }
 }
 
-module.exports = {
-    Trajectory
+function applyInputToParameters(context, input) {
+    const { state } = context;
+    try {
+        input = applyDataTemplate(state.Parameters, input);
+        return [ STATUS.OK, input ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
+    }
+}
+
+function selectResult(context, output) {
+    const { state } = context;
+    try {
+        output = applyPath(state.ResultSelector, output);
+        return [ STATUS.OK, output ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
+    }
+}
+
+function assocResultPath(context, input, output) {
+    const { state } = context;
+    try {
+        output = assocPath(state.ResultPath, input, output);
+        return [ STATUS.OK, output ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
+    }
+}
+
+function selectOutputPath(context, output) {
+    const { state } = context;
+    try {
+        output = applyPath(state.OutputPath, output);
+        return [ STATUS.OK, output ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
+    }
+}
+
+
+async function executeHandler(context, input) {
+    const { state } = context;
+
+    if (!(state.Type in executionHandlers)) throw new Error(`Unhandled state type: ${state.Type}`);
+
+    let status;
+    let output;
+
+    try {
+        const handler = executionHandlers[state.Type];
+        [ status, output ] = await handler(context, input);
+    } catch (error) {
+        status = STATUS.ERROR;
+        output = error;
+    }
+
+    return [ status, output ];
+}
+
+const Executor = (context, machineDef) => async (effect, ...args) => {
+    const { state } = context;
+
+    if (effect == 'StateInfo') {
+        context.log('info', 'State', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'StateFail') {
+        context.log('fail', 'State', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'StateSucceed') {
+        context.log('succeed', 'State', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'MachineStart') {
+        context.log('succeed', 'Machine', '+', 'MachineStarted', args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'MachineInfo') {
+        context.log('info', 'Machine', '•', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'MachineFail') {
+        context.log('fail', 'Machine', '-', 'MachineFailed', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'MachineSucceed') {
+        context.log('succeed', 'Machine', '-', 'MachineSucceeded', ...args);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'InitializeState') {
+        const [ stateKey, state, input ] = args;
+        context.stateKey = stateKey;
+        context.state = state;
+        context.log('info', 'State', 'StateInitialized', input);
+        return [ STATUS.OK, null ];
+    }
+
+    if (effect == 'ProcessInputPath') {
+        const [ input ] = args;
+        const [ status, handlerInput ] = selectInputPath(context, input);
+        context.status = status;
+        return [ status, handlerInput ];
+    }
+
+    if (effect == 'ProcessParameters') {
+        const [ input ] = args;
+        const [ status, handlerInput ] = applyInputToParameters(context, input);
+        context.status = status;
+        return [ status, handlerInput ];
+    }
+
+    if (effect == 'ExecuteHandler') {
+        const [ handlerInput ] = args;
+        const [ status, output ] = await executeHandler(context, handlerInput);
+        context.status = status;
+        return [ status, output ];
+    }
+
+    if (effect == 'ProcessResultSelector') {
+        const [ output ] = args;
+        const [ status, result ] = selectResult(context, output);
+        return [ status, result ];
+    }
+
+    if (effect == 'ProcessResultPath') {
+        const [ input, output ] = args;
+        const [ status, result ] = assocResultPath(context, input, output);
+        return [ status, result ];
+    }
+
+    if (effect == 'ProcessOutputPath') {
+        const [ output ] = args;
+        const [ status, selectedOutput ] = selectOutputPath(context, output);
+        return [ status, selectedOutput ];
+    }
+
+    throw new Error(`Unhandled effect: ${effect}`);
 };
+
+function initializeContext(context, machineDef, input) {
+    context = Object.create(context ?? {});
+    context.stateKey = context.stateKey ?? machineDef.StartAt;
+    context.state = context.state ?? machineDef.States[context.stateKey];
+    context.depth = context.depth ?? 1;
+    context.handlers = context.handlers ?? {}
+
+    context.quiet = context.quiet ?? true;
+
+    if (context.quiet) {
+        context.log = () => {};
+    } else {
+        context.log = context.log ?? ((logStatus, logType, ...args) => {
+            if (logType == 'State') {
+                if (logStatus == 'info') {
+                    return logStateInfo(context, ...args);
+                } else if (logStatus == 'succeed') {
+                    return logStateSucceed(context, ...args);
+                } else if (logStatus == 'fail') {
+                    return logStateFail(context, ...args);
+                }
+            } else if (logType == 'Machine') {
+                if (logStatus == 'info') {
+                    return logMachineInfo(context, ...args);
+                } else if (logStatus == 'succeed') {
+                    return logMachineSucceed(context, ...args);
+                } else if (logStatus == 'fail') {
+                    return logMachineFail(context, ...args);
+                }
+            }
+        });
+    }
+
+    return context;
+}
+
+export async function executeMachine(machineDef, context, input) {
+
+    context = initializeContext(context, machineDef, input);
+
+    const { error, value  } = StateMachineSchema.validate(machineDef);
+
+    if (error instanceof Joi.ValidationError) {
+        console.error('errors', error.details.map(d => d.message));
+        throw error;
+    } else {
+        machineDef = value;
+    }
+
+    input = input ?? {};
+
+    const [ finalState, output ] = await withEffects(
+        StateMachine(machineDef, input),
+        Executor(context, machineDef)
+    );
+
+    return [ finalState, output ];
+}

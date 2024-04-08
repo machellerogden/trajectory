@@ -1,15 +1,10 @@
 # State Machine Specification
 
-> This is work-in-progress and currently is incomplete.
-
-# Descriptor Syntax
-
-TypeScript is used below to describe the specification. TypeScript is prefered here over something like EBNF in hopes that it will be more approachable. Please note trajectory is not implemented in TypeScript. Typescript appears here solely to act as a descriptor syntax.
-
-```
+```typescript
 interface StateMachine {
-    StartsAt: string;
+    StartAt: string;
     States: States;
+    Comment?: string;
 }
 
 interface States {
@@ -35,7 +30,7 @@ interface Pass extends BaseState {
 
 interface Task extends BaseState {
     Type: 'Task';
-    Resource: string;
+    Handler: string;
     ResultPath?: string;
     Parameters?: any;
     Retry?: object[];

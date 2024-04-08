@@ -1,0 +1,60 @@
+{
+    "StartAt": "Greet",
+    "States": {
+        "Greet": {
+            "Type": "Task",
+            "Handler": "greet",
+            "InputPath": "$.name",
+            "ResultPath": "$.message",
+            "Next": "State with long name"
+        },
+        "State with long name": {
+            "Type": "Parallel",
+            "Branches": [
+                {
+                    "StartAt": "A state with an even longer name",
+                    "States": {
+                        "A state with an even longer name": {
+                            "Type": "Choice",
+                            "Choices": [
+                                {
+                                    "Variable": "$.name",
+                                    "StringEquals": "Mac",
+                                    "Next": "Wait"
+                                }
+                            ],
+                            "Default": "Dismiss"
+                        },
+                        "Wait": {
+                            "Type": "Wait",
+                            "Seconds": 1,
+                            "Next": "Greet"
+                        },
+                        "Greet": {
+                            "Type": "Task",
+                            "Handler": "greet",
+                            "InputPath": "$.name",
+                            "ResultPath": "$.message",
+                            "Next": "Dismiss"
+                        },
+                        "Dismiss": {
+                            "Type": "Task",
+                            "Handler": "dismiss",
+                            "InputPath": "$.name",
+                            "ResultPath": "$.message"
+                        }
+                    }
+                }
+            ],
+            "OutputPath": "$[0]",
+            "Next": "Dismiss"
+        },
+        "Dismiss": {
+            "Type": "Task",
+            "Handler": "dismiss",
+            "InputPath": "$.name",
+            "ResultPath": "$.message",
+            "End": true
+        }
+    }
+}

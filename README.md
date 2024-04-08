@@ -2,29 +2,11 @@
 
 > A workflow orchestration framework.
 
-**Warning:** This is a work-in-progress and under heavy development. Watch out for falling debris.
-
 ## Summary
 
-Trajectory allows you to execute workflows defined in [Amazon State Language](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html) (ASL). If you already are familiar with ASL then you'll have no trouble using Trajectory.
+Trajectory allows you to execute workflows defined in a slightly modified version of [Amazon State Language](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html) (ASL). If you already are familiar with ASL then you'll have no trouble using Trajectory.
 
 The [Amazon State Language Specification](https://states-language.net/spec.html) was developed as a language for defining State Machines in AWS Step Functions. Trajectory repurposes ASL for executing JavaScript function. Where AWS Step Functions invoke lambdas, activities, and connectors, Trajectory simply invokes JavaScript functions.
-
-## TODO
-
-- [x] Sequential
-- [x] Parallel
-- [x] Data pipeline
-- [x] Events
-- [x] Built-In Reporter
-- [x] IO Control Flow
-- [x] Retry
-- [x] Catch
-- [ ] Error enums
-- [x] Timeout
-- [x] Choice
-- [x] Cancel all scheduled work on across all branches on uncaught errors
-- [ ] Update state machine specification to reflect latest Joi schema
 
 # Credits
 

@@ -2,7 +2,7 @@ import { withEffects, fx } from 'with-effects';
 import { JSONPathQuery, JSONPathParts, applyPath, assocPath, applyDataTemplate } from './lib/io.js';
 import { StateMachine as StateMachineSchema } from './lib/schema.js';
 import { findChoice } from './lib/rules.js';
-import { compose, sleep } from './lib/utils.js';
+import { sleep } from './lib/utils.js';
 import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
 import { STATUS, STATE } from './lib/constants.js';
@@ -240,7 +240,6 @@ function selectOutputPath(context, output) {
     }
 }
 
-
 async function executeHandler(context, input) {
     const { state } = context;
 
@@ -300,7 +299,7 @@ const stateEffects = {
     'InitializeState': initializeState
 };
 
-const Executor = (context, machineDef) => async (effect, ...args) => {
+const Executor = (context, machineDef) => async function effectHandler(effect, ...args) {
     const { state } = context;
 
     if (effect in logEffects) return logEffects[effect](context, effect, ...args);
@@ -326,7 +325,7 @@ export async function executeMachine(machineDef, context, input) {
 
     context = initializeContext(context, machineDef, input);
 
-    const { error, value  } = StateMachineSchema.validate(machineDef);
+    const { error, value } = StateMachineSchema.validate(machineDef);
 
     if (error instanceof Joi.ValidationError) {
         console.error('errors', error.details.map(d => d.message));

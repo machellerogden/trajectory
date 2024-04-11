@@ -3,7 +3,7 @@ import { JSONPathQuery, JSONPathParts, applyPath, assocPath, applyDataTemplate }
 import { StateMachine as StateMachineSchema } from './lib/schema.js';
 import { findChoice } from './lib/rules.js';
 import { compose, sleep } from './lib/utils.js';
-import { logMachineInfo, logMachineSucceed, logMachineFail, logStateInfo, logStateSucceed, logStateFail } from './lib/log.js';
+import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
 import { STATUS, STATE } from './lib/constants.js';
 
@@ -12,6 +12,8 @@ async function* StateTransition(States, stateKey, input) {
     const state = States[stateKey];
 
     yield fx('InitializeState', stateKey, state, input);
+
+    yield fx('StateInfo', 'StateInitialized', input);
 
     let status;
     let handlerInput = input;
@@ -253,41 +255,16 @@ async function executeHandler(context, input) {
     return [ status, output ];
 }
 
+const logEventSet = new Set([
+    'StateInfo', 'StateFail', 'StateSucceed',
+    'MachineStart', 'MachineFail', 'MachineSucceed'
+]);
+
 const Executor = (context, machineDef) => async (effect, ...args) => {
     const { state } = context;
 
-    if (effect == 'StateInfo') {
-        context.log('info', 'State', ...args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'StateFail') {
-        context.log('fail', 'State', ...args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'StateSucceed') {
-        context.log('succeed', 'State', ...args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'MachineStart') {
-        context.log('succeed', 'Machine', '+', 'MachineStarted', args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'MachineInfo') {
-        context.log('info', 'Machine', '•', ...args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'MachineFail') {
-        context.log('fail', 'Machine', '-', 'MachineFailed', ...args);
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'MachineSucceed') {
-        context.log('succeed', 'Machine', '-', 'MachineSucceeded', ...args);
+    if (logEventSet.has(effect)) {
+        context.log(effect, ...args);
         return [ STATUS.OK, null ];
     }
 
@@ -295,7 +272,6 @@ const Executor = (context, machineDef) => async (effect, ...args) => {
         const [ stateKey, state, input ] = args;
         context.stateKey = stateKey;
         context.state = state;
-        context.log('info', 'State', 'StateInitialized', input);
         return [ STATUS.OK, null ];
     }
 
@@ -347,32 +323,8 @@ function initializeContext(context, machineDef, input) {
     context.state = context.state ?? machineDef.States[context.stateKey];
     context.depth = context.depth ?? 1;
     context.handlers = context.handlers ?? {}
-
     context.quiet = context.quiet ?? true;
-
-    if (context.quiet) {
-        context.log = () => {};
-    } else {
-        context.log = context.log ?? ((logStatus, logType, ...args) => {
-            if (logType == 'State') {
-                if (logStatus == 'info') {
-                    return logStateInfo(context, ...args);
-                } else if (logStatus == 'succeed') {
-                    return logStateSucceed(context, ...args);
-                } else if (logStatus == 'fail') {
-                    return logStateFail(context, ...args);
-                }
-            } else if (logType == 'Machine') {
-                if (logStatus == 'info') {
-                    return logMachineInfo(context, ...args);
-                } else if (logStatus == 'succeed') {
-                    return logMachineSucceed(context, ...args);
-                } else if (logStatus == 'fail') {
-                    return logMachineFail(context, ...args);
-                }
-            }
-        });
-    }
+    context.log = context.quiet ? () => {} : DefaultLogger(context);
 
     return context;
 }

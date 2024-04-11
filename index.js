@@ -88,7 +88,7 @@ async function* StateMachine(machineDef, io) {
     return [ stateKey, io ];
 }
 
-const executionHandlers = {
+const stateHandlers = {
 
     async Pass(context, input) {
         const state = context.state;
@@ -115,18 +115,9 @@ const executionHandlers = {
 
             context.depth++;
 
-            let result = await Promise.all(state.Branches.map(async branch => {
-                try {
-                    const [ finalState, output ] = await executeMachine(branch, context, input);
-
-                    if (finalState == STATE.FAILED) {
-                        return [ STATUS.ERROR, output ];
-                    }
-                    return [ STATUS.OK, output ];
-                } catch (error) {
-                    return [ STATUS.ERROR, error ];
-                }
-            }));
+            let result = await Promise.all(
+                state.Branches.map(async branch =>
+                    executeMachine(branch, context, input)));
 
             context.depth--;
 
@@ -243,18 +234,10 @@ function selectOutputPath(context, output) {
 async function executeHandler(context, input) {
     const { state } = context;
 
-    if (!(state.Type in executionHandlers)) throw new Error(`Unhandled state type: ${state.Type}`);
+    if (!(state.Type in stateHandlers)) throw new Error(`Unhandled state type: ${state.Type}`);
 
-    let status;
-    let output;
-
-    try {
-        const handler = executionHandlers[state.Type];
-        [ status, output ] = await handler(context, input);
-    } catch (error) {
-        status = STATUS.ERROR;
-        output = error;
-    }
+    const handler = stateHandlers[state.Type];
+    const [ status, output ] = await handler(context, input);
 
     return [ status, output ];
 }
@@ -322,24 +305,28 @@ function initializeContext(context, machineDef, input) {
 }
 
 export async function executeMachine(machineDef, context, input) {
+    try {
+        context = initializeContext(context, machineDef, input);
 
-    context = initializeContext(context, machineDef, input);
+        const { error, value } = StateMachineSchema.validate(machineDef);
 
-    const { error, value } = StateMachineSchema.validate(machineDef);
+        if (error instanceof Joi.ValidationError) {
+            console.error('errors', error.details.map(d => d.message));
+            throw error;
+        } else {
+            machineDef = value;
+        }
 
-    if (error instanceof Joi.ValidationError) {
-        console.error('errors', error.details.map(d => d.message));
-        throw error;
-    } else {
-        machineDef = value;
+        input = input ?? {};
+
+        const [ finalState, output ] = await withEffects(
+            StateMachine(machineDef, input),
+            Executor(context, machineDef)
+        );
+
+        return [ finalState, output ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
     }
 
-    input = input ?? {};
-
-    const [ finalState, output ] = await withEffects(
-        StateMachine(machineDef, input),
-        Executor(context, machineDef)
-    );
-
-    return [ finalState, output ];
 }

@@ -41,7 +41,6 @@ async function* StateTransition(States, stateKey, input) {
         yield fx('StateSucceed', 'HandlerSucceeded', output);
     }
 
-
     if (state.ResultSelector) {
         [ status, output ] = yield fx('ProcessResultSelector', output);
         yield fx('StateInfo', 'ResultSelector', state.ResultSelector, output);
@@ -146,17 +145,21 @@ const executionHandlers = {
     },
     async Choice(context, input) {
         const state = context.state;
-        const choice = findChoice(state.Choices, input);
-        const Next = choice == null
-            ? state.Default
-            : choice.Next;
 
-        if (Next == null) throw new Error(`no where to go`);
+        try {
 
-        delete state.End;
-        state.Next = Next;
+            const choice = findChoice(state.Choices, input);
+            const Next = choice == null ? state.Default : choice.Next;
 
-        return [ STATUS.OK, input ];
+            if (Next == null) throw new Error(`no where to go`);
+
+            delete state.End;
+            state.Next = Next;
+
+            return [ STATUS.OK, input ];
+        } catch (error) {
+            return [ STATUS.ERROR, error ];
+        }
     },
     async Succeed(context, input) {
         return [ STATUS.OK, input ];
@@ -168,20 +171,22 @@ const executionHandlers = {
         const state = context.state;
         let delay = 0;
 
-        if (state.Seconds != null) {
-            delay = state.Seconds * 1000;
-        } else if (state.SecondsPath != null) {
-            delay = JSONPathQuery(state.SecondsPath, input) * 1000;
-        } else if (state.TimestampPath != null) {
-            const timestamp = JSONPathQuery(state.TimestampPath, input);
-            delay = new Date(timestamp) - Date.now();
-        } else if (state.Timestamp != null) {
-            delay = new Date(state.Timestamp) - Date.now();
+        try {
+            if (state.Seconds != null) {
+                delay = state.Seconds * 1000;
+            } else if (state.SecondsPath != null) {
+                delay = JSONPathQuery(state.SecondsPath, input) * 1000;
+            } else if (state.TimestampPath != null) {
+                const timestamp = JSONPathQuery(state.TimestampPath, input);
+                delay = new Date(timestamp) - Date.now();
+            } else if (state.Timestamp != null) {
+                delay = new Date(state.Timestamp) - Date.now();
+            }
+            await sleep(delay);
+            return [ STATUS.OK, input ];
+        } catch (error) {
+            return [ STATUS.ERROR, error ];
         }
-
-        await sleep(delay);
-
-        return [ STATUS.OK, input ];
     }
 };
 
@@ -255,64 +260,52 @@ async function executeHandler(context, input) {
     return [ status, output ];
 }
 
-const logEventSet = new Set([
-    'StateInfo', 'StateFail', 'StateSucceed',
-    'MachineStart', 'MachineFail', 'MachineSucceed'
-]);
+function handleLogEffect(context, effect, ...args) {
+    context.log(effect, ...args);
+    return [ STATUS.OK, null ];
+}
+
+const logEffects = {
+    'StateInfo': handleLogEffect,
+    'StateSucceed': handleLogEffect,
+    'StateFail': handleLogEffect,
+    'MachineStart': handleLogEffect,
+    'MachineSucceed': handleLogEffect,
+    'MachineFail': handleLogEffect
+};
+
+const wrapStateOperation = (fn) => async function handleStateEffect(context, ...args) {
+    try {
+        const [ status, output ] = await fn(context, ...args);
+        context.status = status;
+        return [ status, output ];
+    } catch (error) {
+        return [ STATUS.ERROR, error ];
+    }
+};
+
+function initializeState(context, stateKey, state, input) {
+    context.stateKey = stateKey;
+    context.state = state;
+    return [ STATUS.OK, null ];
+}
+
+const stateEffects = {
+    'ProcessInputPath': wrapStateOperation(selectInputPath),
+    'ProcessParameters': wrapStateOperation(applyInputToParameters),
+    'ExecuteHandler': wrapStateOperation(executeHandler),
+    'ProcessResultSelector': wrapStateOperation(selectResult),
+    'ProcessResultPath': wrapStateOperation(assocResultPath),
+    'ProcessOutputPath': wrapStateOperation(selectOutputPath),
+    'InitializeState': initializeState
+};
 
 const Executor = (context, machineDef) => async (effect, ...args) => {
     const { state } = context;
 
-    if (logEventSet.has(effect)) {
-        context.log(effect, ...args);
-        return [ STATUS.OK, null ];
-    }
+    if (effect in logEffects) return logEffects[effect](context, effect, ...args);
 
-    if (effect == 'InitializeState') {
-        const [ stateKey, state, input ] = args;
-        context.stateKey = stateKey;
-        context.state = state;
-        return [ STATUS.OK, null ];
-    }
-
-    if (effect == 'ProcessInputPath') {
-        const [ input ] = args;
-        const [ status, handlerInput ] = selectInputPath(context, input);
-        context.status = status;
-        return [ status, handlerInput ];
-    }
-
-    if (effect == 'ProcessParameters') {
-        const [ input ] = args;
-        const [ status, handlerInput ] = applyInputToParameters(context, input);
-        context.status = status;
-        return [ status, handlerInput ];
-    }
-
-    if (effect == 'ExecuteHandler') {
-        const [ handlerInput ] = args;
-        const [ status, output ] = await executeHandler(context, handlerInput);
-        context.status = status;
-        return [ status, output ];
-    }
-
-    if (effect == 'ProcessResultSelector') {
-        const [ output ] = args;
-        const [ status, result ] = selectResult(context, output);
-        return [ status, result ];
-    }
-
-    if (effect == 'ProcessResultPath') {
-        const [ input, output ] = args;
-        const [ status, result ] = assocResultPath(context, input, output);
-        return [ status, result ];
-    }
-
-    if (effect == 'ProcessOutputPath') {
-        const [ output ] = args;
-        const [ status, selectedOutput ] = selectOutputPath(context, output);
-        return [ status, selectedOutput ];
-    }
+    if (effect in stateEffects) return stateEffects[effect](context, ...args);
 
     throw new Error(`Unhandled effect: ${effect}`);
 };

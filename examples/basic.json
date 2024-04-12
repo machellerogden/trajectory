@@ -3,7 +3,7 @@
     "States": {
         "Greet": {
             "Type": "Task",
-            "Handler": "greet",
+            "Resource": "greet",
             "InputPath": "$.name",
             "ResultPath": "$.message",
             "Next": "State with long name"
@@ -32,14 +32,14 @@
                         },
                         "Greet": {
                             "Type": "Task",
-                            "Handler": "greet",
+                            "Resource": "greet",
                             "InputPath": "$.name",
                             "ResultPath": "$.message",
                             "Next": "Dismiss"
                         },
                         "Dismiss": {
                             "Type": "Task",
-                            "Handler": "dismiss",
+                            "Resource": "dismiss",
                             "InputPath": "$.name",
                             "ResultPath": "$.message"
                         }
@@ -51,7 +51,7 @@
         },
         "Dismiss": {
             "Type": "Task",
-            "Handler": "dismiss",
+            "Resource": "dismiss",
             "InputPath": "$.name",
             "ResultPath": "$.message",
             "End": true

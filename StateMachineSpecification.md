@@ -30,7 +30,7 @@ interface Pass extends BaseState {
 
 interface Task extends BaseState {
     Type: 'Task';
-    Handler: string;
+    Resource: string;
     ResultPath?: string;
     Parameters?: any;
     Retry?: object[];

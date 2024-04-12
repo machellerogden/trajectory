@@ -10,14 +10,14 @@
     },
     "ValidateOrder": {
       "Type": "Task",
-      "Handler": "validateOrder",
+      "Resource": "validateOrder",
       "InputPath": "$.order",
       "ResultPath": "$.order",
       "Next": "ProcessPayment"
     },
     "ProcessPayment": {
       "Type": "Task",
-      "Handler": "processPayment",
+      "Resource": "processPayment",
       "InputPath": "$.order",
       "ResultPath": "$.paymentResult",
       "Next": "IsPaymentSuccessful"
@@ -35,7 +35,7 @@
     },
     "CheckStock": {
       "Type": "Task",
-      "Handler": "checkStock",
+      "Resource": "checkStock",
       "InputPath": "$.order",
       "ResultPath": "$.stockCheckResult",
       "Next": "IsStockAvailable"
@@ -53,20 +53,20 @@
     },
     "ShipOrder": {
       "Type": "Task",
-      "Handler": "shipOrder",
+      "Resource": "shipOrder",
       "InputPath": "$.order",
       "ResultPath": "$.shippingInfo",
       "Next": "OrderComplete"
     },
     "NotifyOutOfStock": {
       "Type": "Task",
-      "Handler": "notifyOutOfStock",
+      "Resource": "notifyOutOfStock",
       "InputPath": "$.order",
       "End": true
     },
     "CancelOrder": {
       "Type": "Task",
-      "Handler": "cancelOrder",
+      "Resource": "cancelOrder",
       "InputPath": "$.order",
       "ResultPath": "$.cancelationInfo",
       "End": true

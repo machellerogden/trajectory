@@ -100,7 +100,7 @@ const stateHandlers = {
         const state = context.state;
 
         try {
-            const result = await context.handlers[state.Handler](input);
+            const result = await context.handlers[state.Resource](input);
 
             return [ STATUS.OK, result ];
         } catch (error) {

@@ -134,6 +134,7 @@ const stateHandlers = {
             return [ STATUS.ERROR, error ];
         }
     },
+
     async Choice(context, input) {
         const state = context.state;
 
@@ -175,6 +176,21 @@ const stateHandlers = {
             }
             await sleep(delay);
             return [ STATUS.OK, input ];
+        } catch (error) {
+            return [ STATUS.ERROR, error ];
+        }
+    },
+
+    async Map(context, input) {
+        const state = context.state;
+
+        try {
+            const items = JSONPathQuery(state.ItemsPath, input);
+
+            const results = await Promise.all(
+                items.map(async item => executeMachine(state.ItemProcessor, context, item)));
+
+            return [ STATUS.OK, results.map(([_, output]) => output) ];
         } catch (error) {
             return [ STATUS.ERROR, error ];
         }

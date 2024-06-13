@@ -1,0 +1,27 @@
+{
+  "StartAt": "FooMap",
+  "States": {
+    "FooMap": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "StartAt": "FooPass",
+        "States": {
+          "FooPass": {
+            "Type": "Pass",
+            "Next": "FooPlusOne"
+          },
+          "FooPlusOne": {
+            "Type": "Task",
+            "Resource": "add",
+            "Parameters": {
+              "a": 1,
+              "b.$": "$"
+            }
+          }
+        }
+      },
+      "ItemsPath": "$.items",
+      "End": true
+    }
+  }
+}

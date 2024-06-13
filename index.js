@@ -5,7 +5,7 @@ import { findChoice } from './lib/rules.js';
 import { sleep } from './lib/utils.js';
 import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
-import { STATUS, STATE } from './lib/constants.js';
+import { STATUS, STATE, EVENT } from './lib/constants.js';
 
 async function* StateTransition(States, stateKey, input) {
     if (!(stateKey in States)) throw new Error(`Unhandled state: ${stateKey}`);
@@ -13,7 +13,7 @@ async function* StateTransition(States, stateKey, input) {
 
     yield fx('InitializeState', stateKey, state, input);
 
-    yield fx('StateInfo', 'StateInitialized', input);
+    yield fx(EVENT.StateInfo, 'StateInitialized', input);
 
     let status;
     let handlerInput = input;
@@ -21,42 +21,42 @@ async function* StateTransition(States, stateKey, input) {
 
     if (state.InputPath) {
         [ status, handlerInput ] = yield fx('ProcessInputPath', input);
-        yield fx('StateInfo', 'InputPath', state.InputPath, handlerInput);
+        yield fx(EVENT.StateInfo, 'InputPath', state.InputPath, handlerInput);
     }
 
     if (state.Parameters) {
         [ status, handlerInput ] = yield fx('ProcessParameters', handlerInput);
-        yield fx('StateInfo', 'Parameters', state.Parameters, handlerInput);
+        yield fx(EVENT.StateInfo, 'Parameters', state.Parameters, handlerInput);
     }
 
-    yield fx('StateInfo', 'StateEntered', handlerInput);
+    yield fx(EVENT.StateInfo, 'StateEntered', handlerInput);
 
-    yield fx('StateInfo', 'HandlerStarted', handlerInput);
+    yield fx(EVENT.StateInfo, 'HandlerStarted', handlerInput);
 
     [ status, output ] = yield fx('ExecuteHandler', handlerInput);
 
     if (status == STATUS.ERROR) {
-        yield fx('StateFail', 'HandlerFailed', output);
+        yield fx(EVENT.StateFail, 'HandlerFailed', output);
     } else {
-        yield fx('StateSucceed', 'HandlerSucceeded', output);
+        yield fx(EVENT.StateSucceed, 'HandlerSucceeded', output);
     }
 
     if (state.ResultSelector) {
         [ status, output ] = yield fx('ProcessResultSelector', output);
-        yield fx('StateInfo', 'ResultSelector', state.ResultSelector, output);
+        yield fx(EVENT.StateInfo, 'ResultSelector', state.ResultSelector, output);
     }
 
     if (state.ResultPath) {
         [ status, output ] = yield fx('ProcessResultPath', input, output);
-        yield fx('StateInfo', 'ResultPath', state.ResultPath, output);
+        yield fx(EVENT.StateInfo, 'ResultPath', state.ResultPath, output);
     }
 
     if (state.OutputPath) {
         [ status, output ] = yield fx('ProcessOutputPath', output);
-        yield fx('StateInfo', 'OutputPath', state.OutputPath, output);
+        yield fx(EVENT.StateInfo, 'OutputPath', state.OutputPath, output);
     }
 
-    yield fx('StateInfo', 'StateExited', output);
+    yield fx(EVENT.StateInfo, 'StateExited', output);
 
     let Next = state.Next;
 
@@ -73,16 +73,16 @@ async function* StateMachine(machineDef, io) {
     let stateKey = machineDef.StartAt;
     const States = machineDef.States;
 
-    yield fx('MachineStart', io);
+    yield fx(EVENT.MachineStart, io);
 
     while (![ STATE.FAILED, STATE.SUCCEEDED ].includes(stateKey)) {
         [ stateKey, io ] = yield* StateTransition(States, stateKey, io);
     }
 
     if (stateKey == STATE.FAILED) {
-        yield fx('MachineFail', io);
+        yield fx(EVENT.MachineFail, io);
     } else {
-        yield fx('MachineSucceed', io);
+        yield fx(EVENT.MachineSucceed, io);
     }
 
     return [ stateKey, io ];
@@ -248,12 +248,12 @@ function handleLogEffect(context, effect, ...args) {
 }
 
 const logEffects = {
-    'StateInfo': handleLogEffect,
-    'StateSucceed': handleLogEffect,
-    'StateFail': handleLogEffect,
-    'MachineStart': handleLogEffect,
-    'MachineSucceed': handleLogEffect,
-    'MachineFail': handleLogEffect
+    [EVENT.StateInfo]: handleLogEffect,
+    [EVENT.StateSucceed]: handleLogEffect,
+    [EVENT.StateFail]: handleLogEffect,
+    [EVENT.MachineStart]: handleLogEffect,
+    [EVENT.MachineSucceed]: handleLogEffect,
+    [EVENT.MachineFail]: handleLogEffect
 };
 
 const wrapStateOperation = (fn) => async function handleStateEffect(context, ...args) {

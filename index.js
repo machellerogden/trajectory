@@ -220,7 +220,7 @@ function applyInputToParameters(context, input) {
 function selectResult(context, output) {
     const { state } = context;
     try {
-        output = applyPath(state.ResultSelector, output);
+        output = applyDataTemplate(state.ResultSelector, output);
         return [ STATUS.OK, output ];
     } catch (error) {
         return [ STATUS.ERROR, error ];

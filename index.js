@@ -188,7 +188,15 @@ const stateHandlers = {
             const items = JSONPathQuery(state.ItemsPath, input);
 
             const results = await Promise.all(
-                items.map(async item => executeMachine(state.ItemProcessor, context, item)));
+                items.map(async (item, idx) => {
+                    let ctx = Object.create(context);
+                    ctx.Map = {};
+                    ctx.Map.Item = {};
+                    ctx.Map.Item.Value = item;
+                    ctx.Map.Item.Index = idx;
+                    ctx.Map.Item.Parent = context?.Map?.Item ?? input;
+                    return executeMachine(state.ItemProcessor, ctx, item);
+                }));
 
             return [ STATUS.OK, results.map(([_, output]) => output) ];
         } catch (error) {
@@ -200,7 +208,7 @@ const stateHandlers = {
 function selectInputPath(context, input) {
     const { state } = context;
     try {
-        input = applyPath(state.InputPath, input);
+        input = applyPath(context, state.InputPath, input);
         return [ STATUS.OK, input ];
     } catch (error) {
         return [ STATUS.ERROR, error ];
@@ -210,7 +218,7 @@ function selectInputPath(context, input) {
 function applyInputToParameters(context, input) {
     const { state } = context;
     try {
-        input = applyDataTemplate(state.Parameters, input);
+        input = applyDataTemplate(context,  state.Parameters, input, context);
         return [ STATUS.OK, input ];
     } catch (error) {
         return [ STATUS.ERROR, error ];
@@ -220,7 +228,7 @@ function applyInputToParameters(context, input) {
 function selectResult(context, output) {
     const { state } = context;
     try {
-        output = applyDataTemplate(state.ResultSelector, output);
+        output = applyDataTemplate(context, state.ResultSelector, output);
         return [ STATUS.OK, output ];
     } catch (error) {
         return [ STATUS.ERROR, error ];
@@ -230,7 +238,7 @@ function selectResult(context, output) {
 function assocResultPath(context, input, output) {
     const { state } = context;
     try {
-        output = assocPath(state.ResultPath, input, output);
+        output = assocPath(context, state.ResultPath, input, output);
         return [ STATUS.OK, output ];
     } catch (error) {
         return [ STATUS.ERROR, error ];
@@ -240,7 +248,7 @@ function assocResultPath(context, input, output) {
 function selectOutputPath(context, output) {
     const { state } = context;
     try {
-        output = applyPath(state.OutputPath, output);
+        output = applyPath(context, state.OutputPath, output);
         return [ STATUS.OK, output ];
     } catch (error) {
         return [ STATUS.ERROR, error ];
@@ -310,6 +318,7 @@ const Executor = (context, machineDef) => async function effectHandler(effect, .
 
 function initializeContext(context, machineDef, input) {
     context = Object.create(context ?? {});
+    context.Map = context.Map ?? {};
     context.stateKey = context.stateKey ?? machineDef.StartAt;
     context.state = context.state ?? machineDef.States[context.stateKey];
     context.depth = context.depth ?? 1;

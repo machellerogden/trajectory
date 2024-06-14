@@ -189,13 +189,16 @@ const stateHandlers = {
 
             const results = await Promise.all(
                 items.map(async (item, idx) => {
-                    let ctx = Object.create(context);
-                    ctx.Map = {};
-                    ctx.Map.Item = {};
-                    ctx.Map.Item.Value = item;
-                    ctx.Map.Item.Index = idx;
-                    ctx.Map.Item.Parent = context?.Map?.Item ?? input;
-                    return executeMachine(state.ItemProcessor, ctx, item);
+
+                    let itemContext = Object.create(context);
+
+                    itemContext.Map = {};
+                    itemContext.Map.Item = {};
+                    itemContext.Map.Item.Value = item;
+                    itemContext.Map.Item.Index = idx;
+                    itemContext.Map.Item.Parent = context?.Map?.Item ?? input;
+
+                    return executeMachine(state.ItemProcessor, itemContext, input);
                 }));
 
             return [ STATUS.OK, results.map(([_, output]) => output) ];

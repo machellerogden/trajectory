@@ -20,7 +20,7 @@ test('Map - 0', async (assert) => {
                             "Resource": "add",
                             "Parameters": {
                                 "a": 1,
-                                "b.$": "$"
+                                "b.$": "$$.Map.Item.Value"
                             }
                         }
                     }
@@ -188,5 +188,60 @@ test('Map - $$MapItemParent', async (assert) => {
 
     assert.is(status, 'SUCCEEDED');
     assert.equal(output, [{ items: [ 1, 2, 3 ], jobId: 'job-123' }, { items: [ 1, 2, 3 ], jobId: 'job-123' }, { items: [ 1, 2, 3 ], jobId: 'job-123' }]);
+
+});
+
+test('Map - Compare jobId', async (assert) => {
+
+    const machine = {
+        "StartAt": "ProcessJobs",
+        "States": {
+            "ProcessJobs": {
+                "Type": "Map",
+                "ItemsPath": "$.jobs",
+                "ItemProcessor": {
+                    "StartAt": "ProcessJob",
+                    "States": {
+                        "ProcessJob": {
+                            "Type": "Task",
+                            "Resource": "compareJobIds",
+                            "Parameters": {
+                                "jobIdA.$": "$$.Map.Item.Value.jobId",
+                                "jobIdB.$": "$$.Map.Item.Parent.jobId",
+                                "jobIdC.$": "$.jobId"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                "End": true
+            }
+        }
+    };
+
+    const handlers = {
+        compareJobIds: ({ jobIdA, jobIdB, jobIdC }) => ({ jobIdA, jobIdB, jobIdC })
+    };
+
+    const context = {
+        handlers,
+        quiet: false
+    };
+
+    const input = {
+        jobs: [
+            { jobId: 'job-001', tasks: [ { taskId: 'task-001-1' }, { taskId: 'task-001-2' } ] },
+            { jobId: 'job-002', tasks: [ { taskId: 'task-002-1' }, { taskId: 'task-002-2' } ] }
+        ],
+        jobId: 'outer-job-id'
+    };
+
+    const [ status, output ] = await executeMachine(machine, context, input);
+
+    assert.is(status, 'SUCCEEDED');
+    assert.equal(output, [
+        { jobIdA: 'job-001', jobIdB: 'outer-job-id', jobIdC: 'outer-job-id'},
+        { jobIdA: 'job-002', jobIdB: 'outer-job-id', jobIdC: 'outer-job-id'}
+    ]);
 
 });

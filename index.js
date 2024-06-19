@@ -185,21 +185,26 @@ const stateHandlers = {
         const state = context.state;
 
         try {
-            const items = JSONPathQuery(state.ItemsPath, input);
+            const itemValues = JSONPathQuery(state.ItemsPath, input);
+
+            const items = itemValues.map((itemValue, itemIndex) => {
+                let itemContext = Object.create(context);
+
+                itemContext.Map = {};
+                itemContext.Map.Item = {};
+                itemContext.Map.Item.Value = itemValue;
+                itemContext.Map.Item.Index = itemIndex;
+                itemContext.Map.Item.Parent = context?.Map?.Item ?? input;
+
+                const selectedItem = applyDataTemplate(itemContext, state.ItemSelector, input);
+
+                return selectedItem;
+
+            });
 
             const results = await Promise.all(
-                items.map(async (item, idx) => {
-
-                    let itemContext = Object.create(context);
-
-                    itemContext.Map = {};
-                    itemContext.Map.Item = {};
-                    itemContext.Map.Item.Value = item;
-                    itemContext.Map.Item.Index = idx;
-                    itemContext.Map.Item.Parent = context?.Map?.Item ?? input;
-
-                    return executeMachine(state.ItemProcessor, itemContext, input);
-                }));
+                items.map(async (item) => executeMachine(state.ItemProcessor, context, item))
+            );
 
             return [ STATUS.OK, results.map(([_, output]) => output) ];
         } catch (error) {
@@ -221,7 +226,7 @@ function selectInputPath(context, input) {
 function applyInputToParameters(context, input) {
     const { state } = context;
     try {
-        input = applyDataTemplate(context,  state.Parameters, input, context);
+        input = applyDataTemplate(context,  state.Parameters, input);
         return [ STATUS.OK, input ];
     } catch (error) {
         return [ STATUS.ERROR, error ];

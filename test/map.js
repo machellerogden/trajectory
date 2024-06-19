@@ -20,12 +20,15 @@ test('Map - 0', async (assert) => {
                             "Resource": "add",
                             "Parameters": {
                                 "a": 1,
-                                "b.$": "$$.Map.Item.Value"
+                                "b.$": "$.item"
                             }
                         }
                     }
                 },
                 "ItemsPath": "$.items",
+                "ItemSelector": {
+                    "item.$": "$$.Map.Item.Value"
+                },
                 "End": true
             }
         }
@@ -37,7 +40,7 @@ test('Map - 0', async (assert) => {
 
     const context = {
         handlers,
-        quiet: false
+        quiet: true
     };
 
     const input = { items: [ 1, 2, 3 ] };
@@ -66,26 +69,29 @@ test('Map - $$MapItemValue', async (assert) => {
                             "Type": "Task",
                             "Resource": "getValue",
                             "Parameters": {
-                                "value.$": "$$.Map.Item.Value"
+                                "value.$": "$.foo"
                             },
                             "End": true
                         }
                     }
                 },
                 "ItemsPath": "$.items",
+                "ItemSelector": {
+                    "foo.$": "$$.Map.Item.Value"
+                },
                 "End": true
             }
         }
     };
 
     const handlers = {
-        //getValue: ({ value }) => value
-        getValue: (a) => (console.log(a), a.value)
+        getValue: ({ value }) => value
+        //getValue: (a) => (console.log(a), a.value)
     };
 
     const context = {
         handlers,
-        quiet: false
+        quiet: true
     };
 
     const input = { items: [ 1, 2, 3 ] };
@@ -114,13 +120,16 @@ test('Map - $$MapItemIndex', async (assert) => {
                             "Type": "Task",
                             "Resource": "getIndex",
                             "Parameters": {
-                                "index.$": "$$.Map.Item.Index"
+                                "index.$": "$.item.Index"
                             },
                             "End": true
                         }
                     }
                 },
                 "ItemsPath": "$.items",
+                "ItemSelector": {
+                    "item.$": "$$.Map.Item"
+                },
                 "End": true
             }
         }
@@ -132,7 +141,7 @@ test('Map - $$MapItemIndex', async (assert) => {
 
     const context = {
         handlers,
-        quiet: false
+        quiet: true
     };
 
     const input = { items: [ 1, 2, 3 ] };
@@ -161,13 +170,16 @@ test('Map - $$MapItemParent', async (assert) => {
                             "Type": "Task",
                             "Resource": "getParent",
                             "Parameters": {
-                                "parent.$": "$$.Map.Item.Parent"
+                                "parent.$": "$.item.Parent"
                             },
                             "End": true
                         }
                     }
                 },
                 "ItemsPath": "$.items",
+                "ItemSelector": {
+                    "item.$": "$$.Map.Item"
+                },
                 "End": true
             }
         }
@@ -179,7 +191,7 @@ test('Map - $$MapItemParent', async (assert) => {
 
     const context = {
         handlers,
-        quiet: false
+        quiet: true
     };
 
     const input = { items: [ 1, 2, 3 ], jobId: 'job-123' };
@@ -199,6 +211,11 @@ test('Map - Compare jobId', async (assert) => {
             "ProcessJobs": {
                 "Type": "Map",
                 "ItemsPath": "$.jobs",
+                "ItemSelector": {
+                    "item.$": "$$.Map.Item.Value",
+                    "parent.$": "$$.Map.Item.Parent",
+                    "root.$": "$",
+                },
                 "ItemProcessor": {
                     "StartAt": "ProcessJob",
                     "States": {
@@ -206,9 +223,9 @@ test('Map - Compare jobId', async (assert) => {
                             "Type": "Task",
                             "Resource": "compareJobIds",
                             "Parameters": {
-                                "jobIdA.$": "$$.Map.Item.Value.jobId",
-                                "jobIdB.$": "$$.Map.Item.Parent.jobId",
-                                "jobIdC.$": "$.jobId"
+                                "jobIdA.$": "$.item.jobId",
+                                "jobIdB.$": "$.parent.jobId",
+                                "jobIdC.$": "$.root.jobId"
                             },
                             "End": true
                         }
@@ -225,7 +242,7 @@ test('Map - Compare jobId', async (assert) => {
 
     const context = {
         handlers,
-        quiet: false
+        quiet: true
     };
 
     const input = {

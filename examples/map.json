@@ -3,6 +3,8 @@
   "States": {
     "FooMap": {
       "Type": "Map",
+      "ItemsPath": "$.items",
+      "ItemSelector": "$$.Map.Item.Value",
       "ItemProcessor": {
         "StartAt": "FooPass",
         "States": {
@@ -20,7 +22,6 @@
           }
         }
       },
-      "ItemsPath": "$.items",
       "End": true
     }
   }

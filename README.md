@@ -8,6 +8,10 @@ Trajectory allows you to execute workflows defined in a slightly modified versio
 
 The [Amazon State Language Specification](https://states-language.net/spec.html) was developed as a language for defining State Machines in AWS Step Functions. Trajectory repurposes ASL for executing JavaScript function. Where AWS Step Functions invoke lambdas, activities, and connectors, Trajectory simply invokes JavaScript functions.
 
+## Roadmap
+
+ - [ ] [Intrinsic Functions](https://docs.aws.amazon.com/step-functions/latest/dg/amazon-states-language-intrinsic-functions.html)
+
 # Credits
 
 The state machine specification used herein is Amazon State Language. Required copyright notice and permission notice follow.

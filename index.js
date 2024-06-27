@@ -5,8 +5,8 @@ import { findChoice } from './lib/rules.js';
 import { sleep } from './lib/utils.js';
 import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
-import { STATUS, STATE, EVENT } from './lib/constants.js';
-import StatesError, { StatesErrors } from './lib/errors.js';
+import { STATUS, STATE, EVENT, ERROR } from './lib/constants.js';
+import { StatesError } from './lib/errors.js';
 
 async function* StateTransition(States, stateKey, input) {
     if (!(stateKey in States)) throw new Error(`Unhandled state: ${stateKey}`);
@@ -137,7 +137,7 @@ const stateHandlers = {
             const result = await (timeout ?
                 Promise.race([
                     context.handlers[state.Resource](input),
-                    new Promise((_, reject) => setTimeout(() => reject(StatesErrors.Timeout), timeout))
+                    new Promise((_, reject) => setTimeout(() => reject(new StatesError(ERROR.States.Timeout)), timeout))
                 ]) :
                 context.handlers[state.Resource](input)
             );

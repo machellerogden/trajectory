@@ -171,5 +171,5 @@ test('Task State - Timeout Handling', async (assert) => {
     const [ status, output ] = await executeMachine(machine, context, input);
 
     assert.is(status, STATE.FAILED);
-    assert.is(output.name, ERROR.States_Timeout);
+    assert.is(output.name, ERROR.States.Timeout);
 });

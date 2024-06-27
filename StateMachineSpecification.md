@@ -11,7 +11,7 @@ interface States {
     [index: string]: State;
 }
 
-type State = Pass | Task | Choice | Wait | Succeed | Fail | Parallel;
+type State = Pass | Task | Choice | Wait | Succeed | Fail | Parallel | Map;
 
 interface BaseState {
     Next?: string;
@@ -34,7 +34,7 @@ interface Task extends BaseState {
     ResultPath?: string;
     Parameters?: any;
     Retry?: object[];
-    Catch?: object;
+    Catch?: object[];
     Timeout?: number;
 }
 
@@ -64,9 +64,21 @@ interface Fail extends BaseState {
 
 interface Parallel extends BaseState {
     Type: 'Parallel';
-    Branches?: object;
+    Branches: StateMachine[];
     ResultPath?: string;
-    Retry?: object;
-    Catch?: object;
+    Retry?: object[];
+    Catch?: object[];
+}
+
+interface Map extends BaseState {
+    Type: 'Map';
+    ItemsPath: string;
+    ItemProcessor: StateMachine[];
+    ItemSelector?: string;
+    ResultSelector?: string;
+    MaxConcurrency?: number;
+    ResultPath?: string;
+    Retry?: object[];
+    Catch?: object[];
 }
 ```

@@ -6,6 +6,7 @@ import { sleep } from './lib/utils.js';
 import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
 import { STATUS, STATE, EVENT } from './lib/constants.js';
+import StatesError, { StatesErrors } from './lib/errors.js';
 
 async function* StateTransition(States, stateKey, input) {
     if (!(stateKey in States)) throw new Error(`Unhandled state: ${stateKey}`);
@@ -33,10 +34,37 @@ async function* StateTransition(States, stateKey, input) {
 
     yield fx(EVENT.StateInfo, 'HandlerStarted', handlerInput);
 
-    [ status, output ] = yield fx('ExecuteHandler', handlerInput);
+    let attempts = 0;
+    const maxAttempts = state.Retry?.[0]?.MaxAttempts || 1;
+    const intervalSeconds = state.Retry?.[0]?.IntervalSeconds || 1;
+    const backoffRate = state.Retry?.[0]?.BackoffRate || 2;
+
+    while (attempts < maxAttempts) {
+        [ status, output ] = yield fx('ExecuteHandler', handlerInput);
+
+        if (status == STATUS.ERROR) {
+            attempts++;
+            if (attempts >= maxAttempts) {
+                yield fx(EVENT.StateFail, 'HandlerFailed', output);
+                if (state.Catch) {
+                    for (const catcher of state.Catch) {
+                        if (catcher.ErrorEquals.includes(output.name)
+                            || catcher.ErrorEquals.includes(output.message)) {
+                            return [ catcher.Next, output ];
+                        }
+                    }
+                }
+                throw output; // Re-throw if no Catch matches
+            }
+            await sleep(intervalSeconds * Math.pow(backoffRate, attempts - 1));
+        } else {
+            break;
+        }
+    }
 
     if (status == STATUS.ERROR) {
         yield fx(EVENT.StateFail, 'HandlerFailed', output);
+        // TODO: handle `Catch` and `Retry` states
     } else {
         yield fx(EVENT.StateSucceed, 'HandlerSucceeded', output);
     }
@@ -76,7 +104,12 @@ async function* StateMachine(machineDef, io) {
     yield fx(EVENT.MachineStart, io);
 
     while (![ STATE.FAILED, STATE.SUCCEEDED ].includes(stateKey)) {
-        [ stateKey, io ] = yield* StateTransition(States, stateKey, io);
+        try {
+            [ stateKey, io ] = yield* StateTransition(States, stateKey, io);
+        } catch (error) {
+            stateKey = STATE.FAILED;
+            io = error;
+        }
     }
 
     if (stateKey == STATE.FAILED) {
@@ -98,10 +131,16 @@ const stateHandlers = {
 
     async Task(context, input) {
         const state = context.state;
+        const timeout = state.TimeoutSeconds ? state.TimeoutSeconds * 1000 : null;
 
         try {
-            const result = await context.handlers[state.Resource](input);
-
+            const result = await (timeout ?
+                Promise.race([
+                    context.handlers[state.Resource](input),
+                    new Promise((_, reject) => setTimeout(() => reject(StatesErrors.Timeout), timeout))
+                ]) :
+                context.handlers[state.Resource](input)
+            );
             return [ STATUS.OK, result ];
         } catch (error) {
             return [ STATUS.ERROR, error ];

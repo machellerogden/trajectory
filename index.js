@@ -2,7 +2,7 @@ import { withEffects, fx } from 'with-effects';
 import { JSONPathQuery, JSONPathParts, applyPath, assocPath, applyDataTemplate } from './lib/io.js';
 import { StateMachine as StateMachineSchema } from './lib/schema.js';
 import { findChoice } from './lib/rules.js';
-import { sleep } from './lib/utils.js';
+import { sleep, deepClone } from './lib/utils.js';
 import { DefaultLogger } from './lib/log.js';
 import Joi from 'joi';
 import { STATUS, STATE, EVENT, ERROR } from './lib/constants.js';
@@ -49,6 +49,7 @@ async function* StateTransition(States, stateKey, input) {
                 if (state.Catch) {
                     for (const catcher of state.Catch) {
                         if (catcher.ErrorEquals.includes(output.name)
+                            || catcher.ErrorEquals.includes('States.ALL')
                             || catcher.ErrorEquals.includes(output.message)) {
                             return [ catcher.Next, output ];
                         }
@@ -364,7 +365,7 @@ const Executor = (context, machineDef) => async function effectHandler(effect, .
 };
 
 function initializeContext(context, machineDef, input) {
-    context = Object.create(context ?? {});
+    context = deepClone(context ?? {});
     context.Map = context.Map ?? {};
     context.stateKey = context.stateKey ?? machineDef.StartAt;
     context.state = context.state ?? machineDef.States[context.stateKey];

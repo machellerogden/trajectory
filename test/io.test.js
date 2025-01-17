@@ -33,3 +33,18 @@ test('applyDataTemplate - 0', async (assert) => {
     assert.equal(actual, expected);
 
 });
+
+test('applyDataTemplate - Resolves Nested Intrinsics', async (assert) => {
+    const context = {};
+    const data = {};
+
+    const template = {
+        array: 'States.Array(States.MathAdd(1, 2), States.MathAdd(3, 4))',
+    };
+
+    const expected = { array: [3, 7] };
+
+    const actual = applyDataTemplate(context, template, data);
+
+    assert.deepEqual(actual, expected, 'applyDataTemplate should resolve nested intrinsic functions');
+});

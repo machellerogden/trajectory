@@ -144,6 +144,52 @@ test('Task State - Catch Mechanism', async (assert) => {
     assert.equal(output, { foo: 'bar' });
 });
 
+test('Task State - Catch Mechanism - States.ALL', async (assert) => {
+    const machine = {
+        "StartAt": "TaskState",
+        "States": {
+            "TaskState": {
+                "Type": "Task",
+                "Resource": "throwError",
+                "Catch": [{
+                    "ErrorEquals": ["Expected Error"],
+                    "Next": "ExpectedErrorState"
+                },{
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackState"
+                }],
+                "End": true
+            },
+            "ExpectedErrorState": {
+                "Type": "Pass",
+                "Result": { "pass": false },
+                "End": true
+            },
+            "FallbackState": {
+                "Type": "Pass",
+                "Result": { "pass": true },
+                "End": true
+            }
+        }
+    };
+
+    const handlers = {
+        throwError: () => { throw new Error('Suprise Error'); }
+    };
+
+    const context = {
+        handlers,
+        quiet: true
+    };
+
+    const input = {};
+
+    const [ status, output ] = await executeMachine(machine, context, input);
+
+    assert.is(status, STATE.SUCCEEDED);
+    assert.equal(output.pass, true);
+});
+
 test('Task State - Timeout Handling', async (assert) => {
     const machine = {
         "StartAt": "TaskState",

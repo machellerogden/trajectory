@@ -1,0 +1,41 @@
+{
+    "Comment": "A Map example that uses an intrinsic function to transform items",
+    "StartAt": "TransformNumbers",
+    "States": {
+        "TransformNumbers": {
+            "Type": "Map",
+            "ItemsPath": "$.numbers",
+            "ItemSelector": {
+                "item.$": "$$.Map.Item.Value"
+            },
+            "ItemProcessor": {
+                "StartAt": "TransformItem",
+                "States": {
+                    "TransformItem": {
+                        "Type": "Task",
+                        "Resource": "transformHandler",
+                        "Parameters": {
+                            "original.$": "$.item",
+                            "squared.$": "States.MathAdd($.item, $.item)"
+                        },
+                        "Catch": [
+                            {
+                                "ErrorEquals": [
+                                    "States.ALL"
+                                ],
+                                "Next": "FriendlyFailure"
+                            }
+                        ],
+                        "End": true
+                    },
+                    "FriendlyFailure": {
+                        "Type": "Fail",
+                        "Error": "ProcessingError",
+                        "Cause": "An error occurred while processing the numbers array. Ensure all values are numbers."
+                    }
+                }
+            },
+            "End": true
+        }
+    }
+}

@@ -29,9 +29,9 @@ try {
     // Execute machine w/ context and input
     const [ status, output ] = await executeMachine(machine, context, input);
 
-    console.log('status', status);
-    console.log('output', output);
+    console.log('Status:', status);
+    console.log('Output:', output);
 
 } catch (error) {
-    console.error('error', error);
+    console.error('Error:', error);
 }

@@ -1,0 +1,12 @@
+{
+    "Comment": "A simple 'Hello World' example with a single Task state",
+    "StartAt": "SayHello",
+    "States": {
+        "SayHello": {
+            "Type": "Task",
+            "Resource": "sayHello",
+            "ResultPath": "$.greeting",
+            "End": true
+        }
+    }
+}

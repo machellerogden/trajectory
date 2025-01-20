@@ -4,7 +4,9 @@
     "FooMap": {
       "Type": "Map",
       "ItemsPath": "$.items",
-      "ItemSelector": "$$.Map.Item.Value",
+      "ItemSelector": {
+        "value": "$$.Map.Item.Value"
+      },
       "ItemProcessor": {
         "StartAt": "FooPass",
         "States": {
@@ -17,7 +19,7 @@
             "Resource": "add",
             "Parameters": {
               "a": 1,
-              "b.$": "$"
+              "b.$": "$.value"
             }
           }
         }

@@ -1,0 +1,27 @@
+{
+    "Comment": "Example that demonstrates using a Choice state to branch logic",
+    "StartAt": "ValidateAge",
+    "States": {
+        "ValidateAge": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.age",
+                    "NumericGreaterThanEquals": 21,
+                    "Next": "ServeDrink"
+                }
+            ],
+            "Default": "DenyDrink"
+        },
+        "ServeDrink": {
+            "Type": "Task",
+            "Resource": "serveDrink",
+            "End": true
+        },
+        "DenyDrink": {
+            "Type": "Task",
+            "Resource": "denyDrink",
+            "End": true
+        }
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "Comment": "Parallel state example with two branches",
+    "StartAt": "RunInParallel",
+    "States": {
+        "RunInParallel": {
+            "Type": "Parallel",
+            "Branches": [
+                {
+                    "StartAt": "Branch1Task",
+                    "States": {
+                        "Branch1Task": {
+                            "Type": "Task",
+                            "Resource": "branchOneTask",
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "Branch2Wait",
+                    "States": {
+                        "Branch2Wait": {
+                            "Type": "Wait",
+                            "Seconds": 1,
+                            "Next": "Branch2Task"
+                        },
+                        "Branch2Task": {
+                            "Type": "Task",
+                            "Resource": "branchTwoTask",
+                            "End": true
+                        }
+                    }
+                }
+            ],
+            "End": true
+        }
+    }
+}

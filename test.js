@@ -6,3 +6,4 @@ import './test/intrinsics.test.js';
 import './test/intrinsicResolver.test.js';
 import './test/integration.test.js';
 import './test/tokenizer.test.js';
+import './test/retryCatch.test.js';

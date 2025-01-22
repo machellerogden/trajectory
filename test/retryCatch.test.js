@@ -1,6 +1,7 @@
 import { test } from 'zora';
 import { executeMachine } from '../index.js';
-import { STATE } from '../lib/constants.js';
+import { STATE, ERROR } from '../lib/constants.js';
+import { StatesError } from '../lib/errors.js';
 
 test('Retry with multiple blocks - partial match', async (assert) => {
     let attemptsForNetworkError = 0;
@@ -127,7 +128,7 @@ test('Multiple Retry blocks - exceed first block attempts => fallback to catch',
     const handlers = {
         alwaysFail: () => {
             attempts++;
-            const err = new Error('Something failed');
+            const err = new StatesError('MyError', 'Something failed');
             err.name = 'MyError';
             throw err;
         }

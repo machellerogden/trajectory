@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { executeMachine } from '../index.js';
+import { StatesError } from '../lib/errors.js';
+import { ERROR } from '../lib/constants.js';
 
 const machine = JSON.parse(readFileSync(new URL('./retryCatch.json', import.meta.url)));
 
@@ -9,8 +11,11 @@ const handlers = {
     unstableTask: async () => {
         attempt++;
         if (attempt < 3) {
-            // Fail for the first 2 attempts
-            throw new Error(`Task failed on attempt #${attempt}`);
+            // Fail for the first 2 attempts using the proper StatesError
+            throw new StatesError(ERROR.States.TaskFailed, 
+                `Task failed on attempt #${attempt}`, 
+                new Error(`Original error from attempt #${attempt}`)
+            );
         }
         // Succeed on the 3rd attempt
         return `Success on attempt #${attempt}`;

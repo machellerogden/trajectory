@@ -8,7 +8,7 @@
             "Retry": [
                 {
                     "ErrorEquals": [
-                        "Error"
+                        "States.TaskFailed"
                     ],
                     "IntervalSeconds": 1,
                     "MaxAttempts": 3

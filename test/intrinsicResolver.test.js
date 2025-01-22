@@ -1,6 +1,7 @@
 import { test } from 'zora';
 import { resolveIntrinsic } from '../lib/intrinsicResolver.js';
 import { intrinsics } from '../lib/intrinsics.js';
+import { ERROR } from '../lib/constants.js';
 
 test('resolveIntrinsic - Valid Intrinsics', (assert) => {
     const context = { foo: 42 };
@@ -18,7 +19,8 @@ test('resolveIntrinsic - Invalid Function', (assert) => {
         resolveIntrinsic('States.InvalidFunction()', {}, {});
         assert.fail('Should throw an error for unsupported intrinsic function');
     } catch (error) {
-        assert.equal(error.message, 'resolveIntrinsic: Unsupported intrinsic function: States.InvalidFunction');
+        assert.equal(error.name, ERROR.States.IntrinsicFailure);
+        assert.ok(error.message.includes('Unsupported intrinsic function: States.InvalidFunction'));
     }
 });
 
@@ -27,7 +29,8 @@ test('resolveIntrinsic - Invalid Format', (assert) => {
         resolveIntrinsic('InvalidFormat()', {}, {});
         assert.fail('Should throw an error for invalid intrinsic function format');
     } catch (error) {
-        assert.equal(error.message, 'resolveIntrinsic: Invalid intrinsic function format: InvalidFormat()');
+        assert.equal(error.name, ERROR.States.IntrinsicFailure);
+        assert.ok(error.message.includes('Invalid intrinsic function format: InvalidFormat()'));
     }
 });
 

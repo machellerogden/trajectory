@@ -1,6 +1,7 @@
 import { test } from 'zora';
 import { executeMachine } from '../index.js';
 import { STATE, ERROR } from '../lib/constants.js';
+import { StatesError } from '../lib/errors.js';
 
 test('Task State - Basic Execution', async (assert) => {
     const machine = {
@@ -48,7 +49,7 @@ test('Task State - Error Handling', async (assert) => {
     };
 
     const handlers = {
-        throwError: () => { throw new Error('Test error'); }
+        throwError: () => { throw new StatesError(ERROR.States.TaskFailed, 'Test error'); }
     };
 
     const context = {
@@ -61,7 +62,7 @@ test('Task State - Error Handling', async (assert) => {
     const [ status, output ] = await executeMachine(machine, context, input);
 
     assert.is(status, STATE.FAILED);
-    assert.equal(output.message, 'Test error');
+    assert.equal(output.name, ERROR.States.TaskFailed);
 });
 
 test('Task State - Retry Mechanism', async (assert) => {
@@ -72,7 +73,7 @@ test('Task State - Retry Mechanism', async (assert) => {
                 "Type": "Task",
                 "Resource": "throwError",
                 "Retry": [{
-                    "ErrorEquals": ["Error"],
+                    "ErrorEquals": [ERROR.States.TaskFailed],
                     "IntervalSeconds": 1,
                     "MaxAttempts": 3
                 }],
@@ -86,7 +87,7 @@ test('Task State - Retry Mechanism', async (assert) => {
     const handlers = {
         throwError: () => {
             attempt++;
-            if (attempt < 3) throw new Error('Test error');
+            if (attempt < 3) throw new StatesError(ERROR.States.TaskFailed, 'Test error');
             return 'Success';
         }
     };
@@ -114,7 +115,7 @@ test('Task State - Catch Mechanism', async (assert) => {
                 "Type": "Task",
                 "Resource": "throwError",
                 "Catch": [{
-                    "ErrorEquals": ["Error"],
+                    "ErrorEquals": [ERROR.States.TaskFailed],
                     "Next": "FallbackState"
                 }],
                 "End": true
@@ -128,7 +129,7 @@ test('Task State - Catch Mechanism', async (assert) => {
     };
 
     const handlers = {
-        throwError: () => { throw new Error('Test error'); }
+        throwError: () => { throw new StatesError(ERROR.States.TaskFailed, 'Test error'); }
     };
 
     const context = {
@@ -155,7 +156,7 @@ test('Task State - Catch Mechanism - States.ALL', async (assert) => {
                     "ErrorEquals": ["Expected Error"],
                     "Next": "ExpectedErrorState"
                 },{
-                    "ErrorEquals": ["States.ALL"],
+                    "ErrorEquals": [ERROR.States.ALL],
                     "Next": "FallbackState"
                 }],
                 "End": true
@@ -174,7 +175,7 @@ test('Task State - Catch Mechanism - States.ALL', async (assert) => {
     };
 
     const handlers = {
-        throwError: () => { throw new Error('Suprise Error'); }
+        throwError: () => { throw new StatesError(ERROR.States.TaskFailed, 'Surprise Error'); }
     };
 
     const context = {
@@ -187,7 +188,7 @@ test('Task State - Catch Mechanism - States.ALL', async (assert) => {
     const [ status, output ] = await executeMachine(machine, context, input);
 
     assert.is(status, STATE.SUCCEEDED);
-    assert.equal(output.pass, true);
+    assert.equal(output, { pass: true });
 });
 
 test('Task State - Timeout Handling', async (assert) => {
@@ -217,5 +218,6 @@ test('Task State - Timeout Handling', async (assert) => {
     const [ status, output ] = await executeMachine(machine, context, input);
 
     assert.is(status, STATE.FAILED);
-    assert.is(output.name, ERROR.States.Timeout);
+    assert.equal(output.name, ERROR.States.Timeout);
+    assert.ok(output.message.includes('Task timed out'));
 });

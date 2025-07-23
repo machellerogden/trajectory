@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "ThinkingCompanion": {
-      "command": "mise x node@20 -- node",
+      "command": "node",
       "args": [
         "/Users/mac/repos/github.com/machellerogden/trajectory/examples/thinking-companion/mcp-server.js"
       ]

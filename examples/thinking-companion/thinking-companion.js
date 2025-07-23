@@ -20,7 +20,11 @@ const handlers = {
     'appendMessageToThread': tasks.appendMessageToThread,
     'extractFinalOuterMessage': tasks.extractFinalOuterMessage,
     'distillSignals': tasks.distillSignals,
-    'aggregateSignals': tasks.aggregateSignals
+    'aggregateSignals': tasks.aggregateSignals,
+    'generateBehavioralInstructions': tasks.generateBehavioralInstructions,
+    'analyzeConversationPatterns': tasks.analyzeConversationPatterns,
+    'generateStrikeClaim': tasks.generateStrikeClaim,
+    'checkConvergence': tasks.checkConvergence
 };
 
 /**

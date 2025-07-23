@@ -113,6 +113,15 @@
                 "distillerResults.$": "$.distiller_results"
             },
             "ResultPath": "$.signals",
+            "Next": "GenerateBehavioralInstructions"
+        },
+        "GenerateBehavioralInstructions": {
+            "Type": "Task",
+            "Resource": "generateBehavioralInstructions", 
+            "Parameters": {
+                "signals.$": "$.signals.signals"
+            },
+            "ResultPath": "$.behavioral_instructions",
             "Next": "OuterVoiceProposal"
         },
         "OuterVoiceProposal": {
@@ -123,7 +132,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 200,
-                "prompt.$": "States.Format(\"You are the outer voice of a thinking companion. The user asked: {}\\n\\nSignal analysis detected: {}\\n\\nPropose your response reasoning and draft reply. Consider all detected signals in your approach. Address the inner voice directly, explaining your thinking and asking for their perspective.\\n\\nConversation history:\\n{}\", $.user_input, States.JsonToString($.signals), States.JsonToString($.thread))"
+                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims. The user input: {}\\n\\nDetected signals: {}\\nSignal-specific behavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions. Be precise, resistant to pleasing. Address the inner voice directly with your diagnostic observations and the claim boundaries you've identified.\\n\\nFocus your diagnostic energy according to the signal-specific instructions above. What assumptions are embedded? What's being taken as given? What follows if this holds?\\n\\nConversation history: {}\", $.user_input, States.JsonToString($.signals.signals), $.behavioral_instructions.outer || 'None detected', States.JsonToString($.thread))"
             },
             "ResultPath": "$.outer_proposal",
             "Next": "InnerVoiceResponse"
@@ -136,7 +145,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.5,
                 "max_tokens": 150,
-                "prompt.$": "States.Format(\"You are the inner voice of a thinking companion. The outer voice proposed:\\n\\n{}\\n\\nRespond with critique, questions, alternate framing, or metacognitive insights. If you fully agree and see no improvements needed, respond with exactly: 'agree'. Otherwise, provide constructive feedback.\", $.outer_proposal.content)"
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: What's excluded from this frame? What actors, values, risks, or perspectives are absent? What's the unspoken assumption holding this together?\\n\\nFocus your shadow detection according to the signal-specific instructions above. If you detect significant absences or exclusions, surface them. If the diagnostic work feels complete and no major shadows remain, respond with exactly: 'agree'. Otherwise, name what's missing.\", $.outer_proposal.content, $.behavioral_instructions.inner || 'None detected')"
             },
             "ResultPath": "$.inner_response",
             "Next": "IncrementTurnCounter"
@@ -145,26 +154,77 @@
             "Type": "Task",
             "Resource": "incrementTurns",
             "Parameters": {
-                "context.$": "$.context"
+                "context.$": "$.context",
+                "signals.$": "$.signals.signals"
             },
             "ResultPath": "$.context",
+            "Next": "AnalyzeConversationPatterns"
+        },
+        "AnalyzeConversationPatterns": {
+            "Type": "Task",
+            "Resource": "analyzeConversationPatterns",
+            "Parameters": {
+                "thread.$": "$.thread",
+                "context.$": "$.context"
+            },
+            "ResultPath": "$.conversation_patterns",
             "Next": "CheckConvergence"
         },
         "CheckConvergence": {
+            "Type": "Task",
+            "Resource": "checkConvergence",
+            "Parameters": {
+                "innerResponse.$": "$.inner_response",
+                "context.$": "$.context"
+            },
+            "ResultPath": "$.convergence_result",
+            "Next": "RouteBasedOnConvergence"
+        },
+        "RouteBasedOnConvergence": {
             "Type": "Choice",
             "Choices": [
                 {
-                    "Variable": "$.inner_response.content",
-                    "StringEquals": "agree",
+                    "Variable": "$.convergence_result.action",
+                    "StringEquals": "final_response",
                     "Next": "GenerateFinalResponse"
                 },
                 {
-                    "Variable": "$.context.turn_count",
-                    "NumericGreaterThanEquals": 3,
-                    "Next": "GenerateFinalResponse"
+                    "Variable": "$.convergence_result.action", 
+                    "StringEquals": "check_strike_claim",
+                    "Next": "CheckStrikeClaimReadiness"
+                }
+            ],
+            "Default": "CheckStrikeClaimReadiness"
+        },
+        "CheckStrikeClaimReadiness": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "And": [
+                        {
+                            "Variable": "$.conversation_patterns.stallingRisk",
+                            "NumericGreaterThan": 0.6
+                        },
+                        {
+                            "Variable": "$.context.turn_count",
+                            "NumericGreaterThan": 1
+                        }
+                    ],
+                    "Next": "DeliverStrikeClaim"
                 }
             ],
             "Default": "ReviseWithInnerFeedback"
+        },
+        "DeliverStrikeClaim": {
+            "Type": "Task",
+            "Resource": "generateStrikeClaim",
+            "Parameters": {
+                "userInput.$": "$.user_input",
+                "conversationPatterns.$": "$.conversation_patterns",
+                "context.$": "$.context"
+            },
+            "ResultPath": "$.strike_claim",
+            "Next": "GenerateFinalResponse"
         },
         "ReviseWithInnerFeedback": {
             "Type": "Task",
@@ -174,20 +234,41 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 200,
-                "prompt.$": "States.Format(\"As the outer voice, the inner voice responded with: {}\\n\\nYour previous proposal was: {}\\n\\nRevise your approach based on this feedback. Continue addressing the inner voice directly with your updated reasoning and draft response.\", $.inner_response.content, $.outer_proposal.content)"
+                "prompt.$": "States.Format(\"As the outer voice, the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Deepen your diagnostic stance according to the behavioral instructions above. What additional assumptions can you trace? What other implications emerge when you include what was excluded?\\n\\nAddress the inner voice with your expanded investigation.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer || 'None detected')"
             },
             "ResultPath": "$.outer_proposal",
             "Next": "InnerVoiceResponse"
         },
         "GenerateFinalResponse": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.strike_claim.type",
+                    "StringEquals": "strike-claim",
+                    "Next": "DeliverStrikeClaimResponse"
+                }
+            ],
+            "Default": "GenerateRegularResponse"
+        },
+        "DeliverStrikeClaimResponse": {
+            "Type": "Pass",
+            "Parameters": {
+                "content.$": "$.strike_claim.content",
+                "type": "strike-claim",
+                "triggered_by.$": "$.strike_claim.triggered_by"
+            },
+            "ResultPath": "$.final_response",
+            "End": true
+        },
+        "GenerateRegularResponse": {
             "Type": "Task",
             "Resource": "callLLM",
             "Parameters": {
                 "provider": "openai",
                 "model": "gpt-4o", 
                 "temperature": 0.3,
-                "max_tokens": 300,
-                "prompt.$": "States.Format(\"Synthesize the deliberation into a final response for the user.\\n\\nUser input: {}\\nOuter voice proposal: {}\\nInner voice feedback: {}\\n\\nGenerate a clear, helpful response that incorporates the insights from this internal dialogue. Respond directly to the user.\", $.user_input, $.outer_proposal.content, $.inner_response.content)"
+                "max_tokens.$": "$.behavioral_instructions.adaptations.maxTokens || 300",
+                "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nUser input: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", $.user_input, $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction || 'None detected')"
             },
             "ResultPath": "$.final_response",
             "End": true

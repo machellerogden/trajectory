@@ -13,13 +13,27 @@ Trajectory is a workflow orchestration framework that executes workflows defined
 npm test          # Run tests with pretty TAP output via tap-diff
 npm run test-ugly # Run raw TAP output without formatting
 node test.js      # Direct test runner execution
+
+# Run individual test files
+node test/integration.test.js    # Integration tests
+node test/task.test.js          # Task state tests
+node test/map.test.js           # Map state tests
+node test/intrinsics.test.js    # Intrinsic functions tests
 ```
 
 ### Running Examples
 ```bash
+# Basic examples
 node examples/helloWorld.js      # Basic workflow example
+node examples/basic.js           # Simple state machine
+
+# Advanced examples  
 node examples/mapIntrinsics.js   # Map state with intrinsic functions
-node examples/<example-name>.js  # Any example file
+node examples/choiceExample.js   # Choice state branching
+node examples/parallelExample.js # Parallel execution
+node examples/orderProcessing.js # Complex workflow example
+node examples/retryCatch.js      # Error handling and retries
+node examples/mapIntrinsicsCustomLogger.js # Custom logging
 ```
 
 ## Architecture
@@ -80,10 +94,21 @@ This enables the state machine runtime to yield effects for logging, I/O operati
 
 ## Development Notes
 
-- ES Module format (`"type": "module"` in package.json)
-- Node.js >=18.0.0 required
-- No build step required - direct Node.js execution
-- No linting or formatting tools configured
-- Examples serve as live documentation and can be executed directly
-- State machine definitions are JSON files that reference JavaScript functions
-- All logging goes through configurable logger system with context preservation
+### Project Structure
+- **ES Module format** (`"type": "module"` in package.json)
+- **Node.js >=18.0.0** required
+- **No build step** required - direct Node.js execution
+- **No linting or formatting** tools configured
+
+### Key Patterns
+- **State Machine Definitions**: JSON files define workflows, JavaScript functions provide task implementations
+- **Effects-Based Architecture**: Core logic uses generator functions that yield effects, side effects handled externally
+- **JSONPath Queries**: Use `$` for input data access, `$$` for context access in state definitions
+- **Intrinsic Functions**: AWS-compatible built-in functions like `States.Array`, `States.MathAdd`
+- **Error Handling**: Custom `StatesError` class preserves error context and supports retry/catch logic
+
+### Development Workflow
+- **Examples as Documentation**: All examples in `/examples/` are executable and demonstrate different features
+- **Paired Files**: Examples have `.js` (executor) and `.json` (state machine definition) files
+- **Test Structure**: Unit tests in `/test/` mirror `/lib/` structure
+- **Configurable Logging**: All logging goes through configurable logger system with immutable context

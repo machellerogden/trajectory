@@ -1,0 +1,105 @@
+{
+    "Comment": "Minimal Thinking Companion PoC - Outer/Inner Voice with Stance Signal",
+    "StartAt": "ReceiveUserInput",
+    "States": {
+        "ReceiveUserInput": {
+            "Type": "Task",
+            "Resource": "appendUserMessage",
+            "Parameters": {
+                "thread.$": "$.thread",
+                "message": {
+                    "role": "user",
+                    "content.$": "$.user_input"
+                }
+            },
+            "ResultPath": "$.thread",
+            "Next": "StanceDistiller"
+        },
+        "StanceDistiller": {
+            "Type": "Task",
+            "Resource": "callLLM",
+            "Parameters": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "temperature": 0,
+                "max_tokens": 5,
+                "prompt.$": "States.Format(\"Analyze this user input and determine the appropriate stance. Respond with exactly one word: supportive, critical, exploratory, or informational.\\n\\nUser input: {}\", $.user_input)"
+            },
+            "ResultPath": "$.stance_signal",
+            "Next": "OuterVoiceProposal"
+        },
+        "OuterVoiceProposal": {
+            "Type": "Task", 
+            "Resource": "callLLM",
+            "Parameters": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "temperature": 0.4,
+                "prompt.$": "States.Format(\"You are the outer voice of a thinking companion. The user asked: {}\\n\\nStance analysis suggests being: {}\\n\\nPropose your response reasoning and draft reply. Address the inner voice directly, explaining your thinking and asking for their perspective.\\n\\nConversation history:\\n{}\", $.user_input, $.stance_signal.content, States.JsonToString($.thread))"
+            },
+            "ResultPath": "$.outer_proposal",
+            "Next": "InnerVoiceResponse"
+        },
+        "InnerVoiceResponse": {
+            "Type": "Task",
+            "Resource": "callLLM", 
+            "Parameters": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "temperature": 0.5,
+                "prompt.$": "States.Format(\"You are the inner voice of a thinking companion. The outer voice proposed:\\n\\n{}\\n\\nRespond with critique, questions, alternate framing, or metacognitive insights. If you fully agree and see no improvements needed, respond with exactly: 'agree'. Otherwise, provide constructive feedback.\", $.outer_proposal.content)"
+            },
+            "ResultPath": "$.inner_response",
+            "Next": "IncrementTurnCounter"
+        },
+        "IncrementTurnCounter": {
+            "Type": "Task",
+            "Resource": "incrementTurns",
+            "Parameters": {
+                "context.$": "$.context"
+            },
+            "ResultPath": "$.context",
+            "Next": "CheckConvergence"
+        },
+        "CheckConvergence": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.inner_response.content",
+                    "StringEquals": "agree",
+                    "Next": "GenerateFinalResponse"
+                },
+                {
+                    "Variable": "$.context.turn_count",
+                    "NumericGreaterThanEquals": 3,
+                    "Next": "GenerateFinalResponse"
+                }
+            ],
+            "Default": "ReviseWithInnerFeedback"
+        },
+        "ReviseWithInnerFeedback": {
+            "Type": "Task",
+            "Resource": "callLLM",
+            "Parameters": {
+                "provider": "openai", 
+                "model": "gpt-4o",
+                "temperature": 0.4,
+                "prompt.$": "States.Format(\"As the outer voice, the inner voice responded with: {}\\n\\nYour previous proposal was: {}\\n\\nRevise your approach based on this feedback. Continue addressing the inner voice directly with your updated reasoning and draft response.\", $.inner_response.content, $.outer_proposal.content)"
+            },
+            "ResultPath": "$.outer_proposal",
+            "Next": "InnerVoiceResponse"
+        },
+        "GenerateFinalResponse": {
+            "Type": "Task",
+            "Resource": "callLLM",
+            "Parameters": {
+                "provider": "openai",
+                "model": "gpt-4o", 
+                "temperature": 0.3,
+                "prompt.$": "States.Format(\"Synthesize the deliberation into a final response for the user.\\n\\nUser input: {}\\nOuter voice proposal: {}\\nInner voice feedback: {}\\n\\nGenerate a clear, helpful response that incorporates the insights from this internal dialogue. Respond directly to the user.\", $.user_input, $.outer_proposal.content, $.inner_response.content)"
+            },
+            "ResultPath": "$.final_response",
+            "End": true
+        }
+    }
+}

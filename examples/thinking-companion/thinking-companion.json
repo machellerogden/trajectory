@@ -13,19 +13,106 @@
                 }
             },
             "ResultPath": "$.thread",
-            "Next": "StanceDistiller"
+            "Next": "SignalDistillers"
         },
-        "StanceDistiller": {
+        "SignalDistillers": {
+            "Type": "Parallel",
+            "Branches": [
+                {
+                    "StartAt": "LogicDistiller",
+                    "States": {
+                        "LogicDistiller": {
+                            "Type": "Task",
+                            "Resource": "distillSignals",
+                            "Parameters": {
+                                "signalClass": "logic",
+                                "userInput.$": "$.user_input"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "StanceDistiller", 
+                    "States": {
+                        "StanceDistiller": {
+                            "Type": "Task",
+                            "Resource": "distillSignals",
+                            "Parameters": {
+                                "signalClass": "stance",
+                                "userInput.$": "$.user_input"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "RhythmDistiller",
+                    "States": {
+                        "RhythmDistiller": {
+                            "Type": "Task", 
+                            "Resource": "distillSignals",
+                            "Parameters": {
+                                "signalClass": "rhythm",
+                                "userInput.$": "$.user_input"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "AffectDistiller",
+                    "States": {
+                        "AffectDistiller": {
+                            "Type": "Task",
+                            "Resource": "distillSignals", 
+                            "Parameters": {
+                                "signalClass": "affect",
+                                "userInput.$": "$.user_input"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "FramingDistiller",
+                    "States": {
+                        "FramingDistiller": {
+                            "Type": "Task",
+                            "Resource": "distillSignals",
+                            "Parameters": {
+                                "signalClass": "framing", 
+                                "userInput.$": "$.user_input"
+                            },
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "MetaDistiller",
+                    "States": {
+                        "MetaDistiller": {
+                            "Type": "Task",
+                            "Resource": "distillSignals",
+                            "Parameters": {
+                                "signalClass": "meta",
+                                "userInput.$": "$.user_input"
+                            }, 
+                            "End": true
+                        }
+                    }
+                }
+            ],
+            "ResultPath": "$.distiller_results",
+            "Next": "AggregateSignals"
+        },
+        "AggregateSignals": {
             "Type": "Task",
-            "Resource": "callLLM",
+            "Resource": "aggregateSignals",
             "Parameters": {
-                "provider": "openai",
-                "model": "gpt-4o",
-                "temperature": 0,
-                "max_tokens": 5,
-                "prompt.$": "States.Format(\"Analyze this user input and determine the appropriate stance. Respond with exactly one word: supportive, critical, exploratory, or informational.\\n\\nUser input: {}\", $.user_input)"
+                "distillerResults.$": "$.distiller_results"
             },
-            "ResultPath": "$.stance_signal",
+            "ResultPath": "$.signals",
             "Next": "OuterVoiceProposal"
         },
         "OuterVoiceProposal": {
@@ -35,7 +122,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.4,
-                "prompt.$": "States.Format(\"You are the outer voice of a thinking companion. The user asked: {}\\n\\nStance analysis suggests being: {}\\n\\nPropose your response reasoning and draft reply. Address the inner voice directly, explaining your thinking and asking for their perspective.\\n\\nConversation history:\\n{}\", $.user_input, $.stance_signal.content, States.JsonToString($.thread))"
+                "max_tokens": 200,
+                "prompt.$": "States.Format(\"You are the outer voice of a thinking companion. The user asked: {}\\n\\nSignal analysis detected: {}\\n\\nPropose your response reasoning and draft reply. Consider all detected signals in your approach. Address the inner voice directly, explaining your thinking and asking for their perspective.\\n\\nConversation history:\\n{}\", $.user_input, States.JsonToString($.signals), States.JsonToString($.thread))"
             },
             "ResultPath": "$.outer_proposal",
             "Next": "InnerVoiceResponse"
@@ -47,6 +135,7 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.5,
+                "max_tokens": 150,
                 "prompt.$": "States.Format(\"You are the inner voice of a thinking companion. The outer voice proposed:\\n\\n{}\\n\\nRespond with critique, questions, alternate framing, or metacognitive insights. If you fully agree and see no improvements needed, respond with exactly: 'agree'. Otherwise, provide constructive feedback.\", $.outer_proposal.content)"
             },
             "ResultPath": "$.inner_response",
@@ -84,6 +173,7 @@
                 "provider": "openai", 
                 "model": "gpt-4o",
                 "temperature": 0.4,
+                "max_tokens": 200,
                 "prompt.$": "States.Format(\"As the outer voice, the inner voice responded with: {}\\n\\nYour previous proposal was: {}\\n\\nRevise your approach based on this feedback. Continue addressing the inner voice directly with your updated reasoning and draft response.\", $.inner_response.content, $.outer_proposal.content)"
             },
             "ResultPath": "$.outer_proposal",
@@ -96,6 +186,7 @@
                 "provider": "openai",
                 "model": "gpt-4o", 
                 "temperature": 0.3,
+                "max_tokens": 300,
                 "prompt.$": "States.Format(\"Synthesize the deliberation into a final response for the user.\\n\\nUser input: {}\\nOuter voice proposal: {}\\nInner voice feedback: {}\\n\\nGenerate a clear, helpful response that incorporates the insights from this internal dialogue. Respond directly to the user.\", $.user_input, $.outer_proposal.content, $.inner_response.content)"
             },
             "ResultPath": "$.final_response",

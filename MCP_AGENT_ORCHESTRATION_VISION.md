@@ -111,4 +111,100 @@ Initial Draft → [Critique → Improve]* → Quality Threshold Check → Final 
 
 ---
 
-**Next Session Pickup Point**: Ready to start prototyping the "Multiple Perspectives Analysis" workflow as an MCP tool, beginning with the basic state machine definition and agent dispatch logic.
+## Current Progress: Thinking Companion PoC (January 2025)
+
+### What We've Built
+
+A sophisticated thinking companion that moves beyond the original "Multiple Perspectives" vision to implement a true **multi-modal AI agent system** with:
+
+**Core Architecture:**
+- **Outer/Inner voice dialogue system** with iterative refinement and convergence detection
+- **6-class parallel signal detection** (logic, stance, rhythm, affect, framing, meta) 
+- **18 distinct signal types** across classes for nuanced behavioral adaptation
+- **Budget-aware execution** with configurable token limits
+- **Depth-aware logging** that cleanly separates main machine from parallel branch events
+
+**Technical Achievements:**
+- Solved Trajectory parallel state execution and logging challenges
+- Implemented robust JSON parsing with error handling for LLM responses
+- Created sophisticated signal aggregation and validation system
+- Built custom reporter with rich formatting and convergence tracking
+- Demonstrated reliable multi-turn dialogue with persistent state
+
+**Signal Detection Classes:**
+```javascript
+SIGNAL_CLASSES = {
+  logic: ["assumption", "implication", "missing-data"],
+  stance: ["certainty", "uncertainty", "defensiveness", "openness"], 
+  rhythm: ["urgent", "patient", "stalling", "building"],
+  affect: ["positive", "negative-calm", "negative-tense", "witness-call", "detachment"],
+  framing: ["problem-solving", "exploration", "evaluation", "narration"],
+  meta: ["self-reference", "process-awareness", "confusion"]
+}
+```
+
+### Key Architectural Insights
+
+**State Machine Orchestration Advantages:**
+- **Deterministic control flow** around non-deterministic LLM operations
+- **Parallel signal processing** with guaranteed aggregation
+- **Rich instrumentation** for debugging and behavioral analysis
+- **Composable workflows** that can be extended and modified
+
+**Trajectory-Specific Learnings:**
+- Parallel branches execute as complete sub-machines with full event lifecycle
+- Context depth (`context.depth`) differentiates main machine from branches
+- Effects system enables clean separation of pure logic from side effects
+- Custom loggers can provide domain-specific visualization of complex workflows
+
+## Vision Evolution: From MCP Tool to Sage Implementation
+
+### The Sage Connection
+
+The thinking companion PoC revealed alignment with a more ambitious goal: implementing a sophisticated **epistemic companion** based on existing Sage system instructions.
+
+**Current Sage System (Instruction-Based) Features:**
+- **6 cognitive modes**: Context Loading, Clarifying, Analytical, Exploratory, Sequential Reasoning, Relational Presence
+- **3 stance modifiers**: Shadow Noticing, Premise Suspension, Strike-Claim (auto-triggered)
+- **5 calibration triggers**: API-like behavioral resets and introspection commands
+- **Auto-triggering intelligence**: Strike-Claim fires on detected "recursive analysis or low-pressure indecision"
+
+**State Management Limitations of Instruction-Based Approach:**
+- Mode persistence across conversational turns
+- Context buffering for silent states
+- Reliable auto-trigger condition detection  
+- Consistent calibration trigger behavior
+- Memory for conversational pattern recognition
+
+### State Machine Solution Path
+
+**Mode System Implementation:**
+Each Sage mode becomes a state machine with proper entry/exit conditions:
+- **Context Loading**: Silent Receiving, Buffering, Full Pause states
+- **Analytical**: Parallel assumption/risk/structure analysis (extending current signal system)
+- **Exploratory**: Idea scattering and reframing workflows
+- **Sequential Reasoning**: Step-by-step logic construction with validation
+
+**Auto-Trigger Intelligence:**
+- **Pattern detection states** analyzing conversation history for recursion/stalling
+- **Strike-Claim delivery** as explicit state transition with controlled tone
+- **Cognitive rhythm tracking** through extended signal classes
+
+**Enhanced Signal Detection:**
+Expanding current 6-class system to include:
+- **Shadow signals**: Detecting absences, exclusions, unspoken elements
+- **Premise signals**: Identifying framing assumptions and logical constraints  
+- **Cognitive patterns**: Recursion detection, stalling identification, clarity metrics
+- **Relational dynamics**: Rapport, resistance, emotional attunement
+
+### Strategic Implications
+
+This evolution transforms the original MCP vision from **"tool for Claude Code"** to **"platform for sophisticated AI agents"**:
+
+1. **Reliability**: State machines provide deterministic behavior vs. instruction drift
+2. **Composability**: Modes and behaviors become reusable workflow components  
+3. **Observability**: Rich instrumentation enables behavioral debugging and refinement
+4. **Scalability**: Complex agent behaviors through systematic state composition
+5. **Maintainability**: Clear separation of concerns vs. monolithic prompt engineering
+
+**Next Session Pickup Point**: Ready to map Sage's mode system into state machine workflows, beginning with Shadow Noticing and Strike-Claim auto-triggering logic as extensions of the current signal detection architecture.

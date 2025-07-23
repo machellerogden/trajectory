@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import * as tasks from './tasks.js';
+import { thinkingCompanionLogger } from './thinking-reporter.js';
 
 // Get the current file's directory
 const __filename = fileURLToPath(import.meta.url);
@@ -17,7 +18,9 @@ const handlers = {
     'callLLM': tasks.callLLM,
     'incrementTurns': tasks.incrementTurns,
     'appendMessageToThread': tasks.appendMessageToThread,
-    'extractFinalOuterMessage': tasks.extractFinalOuterMessage
+    'extractFinalOuterMessage': tasks.extractFinalOuterMessage,
+    'distillSignals': tasks.distillSignals,
+    'aggregateSignals': tasks.aggregateSignals
 };
 
 /**
@@ -33,7 +36,8 @@ export async function runThinkingCompanion(userInput, options = {}) {
 
     const context = {
         handlers,
-        quiet: options.quiet !== false, // Default to quiet mode
+        quiet: options.quiet !== false, // Default to quiet mode  
+        log: thinkingCompanionLogger,
         ...options.context
     };
 
@@ -65,22 +69,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('---');
 
     try {
-        const [status, output] = await runThinkingCompanion(userInput, { quiet: false });
-        
-        console.log('---');
-        console.log('Status:', status);
-        console.log('Final Response:');
-        console.log(output.final_response?.content || 'No final response generated');
-        
-        if (output.thread) {
-            console.log('\n🧵 Internal Dialogue Thread:');
-            output.thread.forEach((msg, i) => {
-                const roleIcon = msg.role === 'user' ? '👤' : 
-                                msg.role === 'outer' ? '🗣️' : 
-                                msg.role === 'inner' ? '💭' : '🤖';
-                console.log(`${i + 1}. ${roleIcon} ${msg.role}: ${msg.content}`);
-            });
-        }
+        const [status, output] = await runThinkingCompanion(userInput, { 
+            quiet: false
+        });
         
     } catch (error) {
         console.error('❌ Error:', error.message);

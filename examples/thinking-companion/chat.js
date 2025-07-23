@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline';
+import chalk from 'chalk';
 import { runThinkingCompanion } from './thinking-companion.js';
 
 class ThinkingCompanionChat {
@@ -118,17 +119,14 @@ Commands:
                 timestamp: new Date().toISOString()
             });
             
-            console.log('\n🤖 AI Response:');
-            console.log(response);
-            
-            // Show internal dialogue if enabled
-            if (this.options.showInternalDialogue && output.thread) {
-                this.showInternalDialogue(output);
-            }
-            
-            // Show stance analysis
-            if (output.stance_signal) {
-                console.log(`\n📊 Detected stance: ${output.stance_signal.content}`);
+            // Show simple response if not in verbose mode
+            if (!this.options.showInternalDialogue) {
+                console.log('\n🤖 AI Response:');
+                console.log(response);
+                
+                if (output.stance_signal) {
+                    console.log(chalk.blue(`\n🎯 Stance: ${output.stance_signal.content}`));
+                }
             }
             
             console.log(); // Extra line for spacing

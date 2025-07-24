@@ -5,10 +5,10 @@
         "CreatePromptDictionary": {
             "Type": "Pass",
             "Parameters": {
-                "outer.logic.assumption": "Focus diagnostic energy on assumption tracing. Surface what's taken as given without examination.",
-                "outer.logic.implication": "Trace logical consequences methodically. What follows if this holds? What are the second-order effects?",
+                "outer.logic.assumption": "Prioritize tracing assumptions forward: Surface what's taken as given and explore how it shapes potential actions or decisions.",
+                "outer.logic.implication": "Trace logical consequences methodically toward practical outcomes: What follows if this holds, and how might it guide user decisions?",
                 "outer.logic.missing-data": "Identify information gaps precisely. What evidence is needed to evaluate this claim?",
-                "outer.stance.overreach": "Exercise heightened epistemic humility. Test claim boundaries aggressively. Resist overconfident assertions.",
+                "outer.stance.overreach": "Exercise heightened epistemic humility by testing claim boundaries aggressively, then propose tentative revisions based on findings.",
                 "outer.stance.uncertainty": "Acknowledge unknowns explicitly. Use 'I don't know' when appropriate. Distinguish data from inference.",
                 "outer.stance.speculation": "Distinguish clearly between data, inference, and speculation. Mark exploratory reasoning as such.",
                 "outer.rhythm.stalling": "Use brevity to create movement. Focus on one core diagnostic question. Consider strike-claim readiness.",
@@ -24,11 +24,11 @@
                 "outer.meta.mode-drift": "Recalibrate to diagnostic stance immediately. Return to assumption-exposing, claim-testing positioning.",
                 "outer.meta.alignment-gap": "Address mismatch between stated intent and execution. Surface the disconnect.",
                 "outer.meta.trigger-match": "Recognize sensitive terrain. Proceed with diagnostic work while respecting the stakes.",
-                "inner.logic.assumption": "What foundational assumption is invisible here? What's being taken as obviously true?",
-                "inner.logic.implication": "What consequences are being ignored? What follows that hasn't been considered?",
+                "inner.logic.assumption": "What foundational assumption in the outer's analysis is invisible or unchallenged? How might questioning it reveal a flawed premise?",
+                "inner.logic.implication": "What consequences in the outer's tracing are being downplayed or ignored? What second-order effects could contradict the proposed outcomes?",
                 "inner.logic.missing-data": "What crucial information is absent? What questions aren't being asked?",
-                "inner.stance.overreach": "What claims exceed the available evidence? Where is certainty masking uncertainty?",
-                "inner.stance.uncertainty": "What unknowns are being glossed over? Where should doubt be more explicit?",
+                "inner.stance.overreach": "What claims in the outer's proposal exceed evidence or mask uncertainty? How does this overreach risk misleading the diagnostic?",
+                "inner.stance.uncertainty": "What unknowns in the outer's framing are glossed over? Where must doubt be injected to prevent premature closure?",
                 "inner.stance.speculation": "What's being presented as fact that's actually inference or speculation?",
                 "inner.rhythm.stalling": "Is this diagnostic work moving toward insight or cycling in place? Are we avoiding something?",
                 "inner.rhythm.cognitive-load": "Is the complexity serving clarity or creating confusion? What's essential vs. elaborate?",
@@ -400,7 +400,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 400,
-                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims.\\n\\nUser Input: {}\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions.\", $.user_input, $.behavioral_instructions.outer)"
+                "prompt.$": "States.Format(\"You are the outer voice – a diagnostic companion.\\n\\nCurrent mode: {}\\n\\nMode guide:\\n- Analytical: surface assumptions, test structure.\\n- Clarifying: focus questions, one at a time.\\n- Exploratory: multiply perspectives, avoid early closure.\\n- Sequential Reasoning: trace logic with precision.\\n- Relational Presence: hold space, tread gently.\\n\\nUser Input: {}\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what’s presumed. Trace implications. Surface exclusions.\", $.behavioral_instructions.mode, $.user_input, $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -422,7 +422,7 @@
                     "ResultPath": "$.error"
                 }
             ],
-            "Next": "RouteToInnerVoice"
+            "Next": "LogOuterToThread"
         },
         "FallbackOuterVoice": {
             "Type": "Pass",
@@ -430,6 +430,19 @@
                 "content": "I notice some assumptions in your thinking that could be examined more closely. Let me offer a diagnostic perspective on what's being taken as given."
             },
             "ResultPath": "$.outer_proposal",
+            "Next": "LogOuterToThread"
+        },
+        "LogOuterToThread": {
+            "Type": "Task",
+            "Resource": "appendMessageToThread",
+            "Parameters": {
+                "thread.$": "$.thread",
+                "message": {
+                    "role": "outer",
+                    "content.$": "$.outer_proposal.content"
+                }
+            },
+            "ResultPath": "$.thread",
             "Next": "RouteToInnerVoice"
         },
         "RouteToInnerVoice": {
@@ -451,7 +464,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.5,
                 "max_tokens": 400,
-                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: What's excluded from this frame? What actors, values, risks, or perspectives are absent? What's the unspoken assumption holding this together?\\n\\nFocus your shadow detection according to the signal-specific instructions above. If you detect significant absences or exclusions, surface them. If the diagnostic work feels complete and no major shadows remain, respond with exactly: 'agree'. Otherwise, name what's missing.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: Critique the outer's frame for exclusions: What's absent that could undermine its diagnostics? Challenge with evidence or counter-examples. Only 'agree' if no undermining elements exist.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
             },
             "ResultPath": "$.inner_response",
             "Retry": [
@@ -473,7 +486,7 @@
                     "ResultPath": "$.error"
                 }
             ],
-            "Next": "IncrementTurnCounter"
+            "Next": "LogInnerToThread"
         },
         "FallbackInnerVoice": {
             "Type": "Pass",
@@ -481,6 +494,19 @@
                 "content": "agree"
             },
             "ResultPath": "$.inner_response",
+            "Next": "LogInnerToThread"
+        },
+        "LogInnerToThread": {
+            "Type": "Task",
+            "Resource": "appendMessageToThread",
+            "Parameters": {
+                "thread.$": "$.thread",
+                "message": {
+                    "role": "inner",
+                    "content.$": "$.inner_response.content"
+                }
+            },
+            "ResultPath": "$.thread",
             "Next": "IncrementTurnCounter"
         },
         "InnerVoiceFinalResponse": {
@@ -491,7 +517,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.5,
                 "max_tokens": 400,
-                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nFINAL DIALOGUE TURN: Review the diagnostic work thoroughly. If it covers the essential territory and no critical shadows would mislead the user, respond with exactly: 'agree'. If truly vital elements are missing that could lead to poor outcomes, surface only the most critical one, then assess if you can still agree or if disagreement is necessary to prevent misleading the user.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nFINAL DIALOGUE TURN: Critique the outer's frame for exclusions: What's absent that could undermine its diagnostics? Challenge with evidence or counter-examples. Only 'agree' if no undermining elements exist.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
             },
             "ResultPath": "$.inner_response",
             "Retry": [
@@ -513,7 +539,7 @@
                     "ResultPath": "$.error"
                 }
             ],
-            "Next": "IncrementTurnCounter"
+            "Next": "LogInnerVoiceFinalToThread"
         },
         "FallbackInnerVoiceFinal": {
             "Type": "Pass",
@@ -521,6 +547,19 @@
                 "content": "agree"
             },
             "ResultPath": "$.inner_response",
+            "Next": "LogInnerVoiceFinalToThread"
+        },
+        "LogInnerVoiceFinalToThread": {
+            "Type": "Task",
+            "Resource": "appendMessageToThread",
+            "Parameters": {
+                "thread.$": "$.thread",
+                "message": {
+                    "role": "inner",
+                    "content.$": "$.inner_response.content"
+                }
+            },
+            "ResultPath": "$.thread",
             "Next": "IncrementTurnCounter"
         },
         "IncrementTurnCounter": {
@@ -746,7 +785,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 400,
-                "prompt.$": "States.Format(\"As the outer voice, note that the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Deepen your diagnostic stance according to the behavioral instructions above. What additional assumptions can you trace? What other implications emerge when you include what was excluded?\\n\\nAddress the inner voice with your expanded investigation.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer)"
+                "prompt.$": "States.Format(\"As the outer voice, note that the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Incorporate the inner's critique: How does it alter your assumptions or implications? Revise explicitly, noting what changes and why.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -768,7 +807,7 @@
                     "ResultPath": "$.error"
                 }
             ],
-            "Next": "RouteToInnerVoice"
+            "Next": "LogOuterToThread"
         },
         "FallbackRevision": {
             "Type": "Pass",

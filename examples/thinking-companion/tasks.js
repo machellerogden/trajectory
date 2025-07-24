@@ -110,11 +110,12 @@ export function extractFinalOuterMessage({ thread = [] }) {
  * Generate behavioral instructions for both voices based on detected signals using prompt dictionary
  */
 export function generateBehavioralInstructions({ signals, prompts }) {
+    const mode = inferModeFromSignals(signals);
     if (!signals || typeof signals !== 'object' || !prompts) {
         return {
             outer: 'None detected',
             inner: 'None detected',
-            adaptations: { maxTokens: 400, instruction: 'None detected' }
+            adaptations: { maxTokens: null, instruction: 'None detected' }
         };
     }
 
@@ -145,23 +146,21 @@ export function generateBehavioralInstructions({ signals, prompts }) {
         }
     }
 
-    // Determine max tokens based on rhythm signals (preserve existing logic)
+    const rhythmTokenGuidance = {
+        'stalling': { max: 100, priority: 3 },
+        'cognitive-load': { max: 150, priority: 2 },
+        'witness-call': { max: 300, priority: 1 }
+    };
+
     let maxTokens = 400;
+    let topPriority = 0;
+
     if (signals.rhythm && Array.isArray(signals.rhythm)) {
         for (const signal of signals.rhythm) {
-            switch (signal) {
-                case 'cognitive-load':
-                    maxTokens = 150;
-                    break;
-                case 'stalling':
-                    maxTokens = 100;
-                    break;
-                case 'witness-call':
-                    maxTokens = 300;
-                    break;
-                default:
-                    maxTokens = 400;
-                    break;
+            const guidance = rhythmTokenGuidance[signal];
+            if (guidance && guidance.priority > topPriority) {
+                topPriority = guidance.priority;
+                maxTokens = guidance.max;
             }
         }
     }
@@ -170,9 +169,10 @@ export function generateBehavioralInstructions({ signals, prompts }) {
         outer: outerInstructions.length > 0 ? outerInstructions.join('\n\n') : 'None detected',
         inner: innerInstructions.length > 0 ? innerInstructions.join('\n\n') : 'None detected',
         adaptations: {
-            maxTokens,
+            maxTokens: maxTokens,
             instruction: adaptationInstructions.length > 0 ? adaptationInstructions.join(' ') : 'None detected'
-        }
+        },
+        mode
     };
 }
 
@@ -620,4 +620,63 @@ function describeCognitivePatterns(patterns) {
     }
 
     return descriptions;
+}
+
+function inferModeFromSignals(signals) {
+    const modeScores = {
+        'Analytical': 0,
+        'Clarifying': 0,
+        'Exploratory': 0,
+        'Sequential Reasoning': 0,
+        'Relational Presence': 0
+    };
+
+    if (!signals || typeof signals !== 'object') return 'Analytical'; // Safe default
+
+    for (const [className, signalList] of Object.entries(signals)) {
+        for (const signal of signalList) {
+            switch (`${className}.${signal}`) {
+                // Analytical
+                case 'logic.assumption':
+                case 'logic.implication':
+                case 'logic.missing-data':
+                case 'meta.alignment-gap':
+                    modeScores['Analytical'] += 1;
+                    break;
+
+                // Clarifying
+                case 'rhythm.stalling':
+                case 'rhythm.cognitive-load':
+                case 'logic.missing-data':
+                    modeScores['Clarifying'] += 1;
+                    break;
+
+                // Exploratory
+                case 'framing.frame':
+                case 'framing.tension':
+                case 'framing.container':
+                    modeScores['Exploratory'] += 1;
+                    break;
+
+                // Sequential Reasoning
+                case 'stance.overreach':
+                case 'meta.mode-drift':
+                case 'logic.implication':
+                    modeScores['Sequential Reasoning'] += 1;
+                    break;
+
+                // Relational Presence
+                case 'affect.witness-call':
+                case 'affect.valence':
+                case 'affect.relational-mode':
+                case 'stance.uncertainty':
+                    modeScores['Relational Presence'] += 1;
+                    break;
+            }
+        }
+    }
+
+    // Pick the highest scoring mode
+    const sorted = Object.entries(modeScores).sort((a, b) => b[1] - a[1]);
+    return sorted[0][1] > 0 ? sorted[0][0] : 'Analytical';
 }

@@ -51,19 +51,6 @@
                 "adaptation.uncertainty": "Be comfortable with 'I don't know' and partial answers. Resist false certainty."
             },
             "ResultPath": "$.prompts",
-            "Next": "ReceiveUserInput"
-        },
-        "ReceiveUserInput": {
-            "Type": "Task",
-            "Resource": "appendUserMessage",
-            "Parameters": {
-                "thread.$": "$.thread",
-                "message": {
-                    "role": "user",
-                    "content.$": "$.user_input"
-                }
-            },
-            "ResultPath": "$.thread",
             "Next": "SignalDistillers"
         },
         "SignalDistillers": {
@@ -83,7 +70,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for logic signals. Detect any of: assumption (unstated assumptions or premises), implication (logical consequences or follow-through), missing-data (information gaps or needed evidence). Return JSON like {{\"signals\": [\"assumption\", \"implication\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for logic signals. Detect any of: assumption (unstated assumptions or premises), implication (logical consequences or follow-through), missing-data (information gaps or needed evidence). Return JSON like {{\"signals\": [\"assumption\", \"implication\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -133,7 +120,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for stance signals. Detect any of: overreach (claims beyond available evidence), uncertainty (acknowledging unknowns or limits), speculation (hypothetical or exploratory reasoning). Return JSON like {{\"signals\": [\"uncertainty\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for stance signals. Detect any of: overreach (claims beyond available evidence), uncertainty (acknowledging unknowns or limits), speculation (hypothetical or exploratory reasoning). Return JSON like {{\"signals\": [\"uncertainty\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -183,7 +170,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for rhythm signals. Detect any of: stalling (hesitation, blockage, or delay patterns), pacing (speed and timing of information delivery), flow (smoothness of progression and transitions), cognitive-load (mental processing burden or complexity). Return JSON like {{\"signals\": [\"stalling\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for rhythm signals. Detect any of: stalling (hesitation, blockage, or delay patterns), pacing (speed and timing of information delivery), flow (smoothness of progression and transitions), cognitive-load (mental processing burden or complexity). Return JSON like {{\"signals\": [\"stalling\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -233,7 +220,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for affect signals. Detect any of: valence (positive/negative emotional charge or sentiment), relational-mode (how to connect and engage with user), witness-call (need for validation, support, or acknowledgment). Return JSON like {{\"signals\": [\"witness-call\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for affect signals. Detect any of: valence (positive/negative emotional charge or sentiment), relational-mode (how to connect and engage with user), witness-call (need for validation, support, or acknowledgment). Return JSON like {{\"signals\": [\"witness-call\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -283,7 +270,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for framing signals. Detect any of: frame (conceptual boundaries, lens, or worldview), tension (competing forces, conflicts, or trade-offs), container (safe space for exploration or vulnerability). Return JSON like {{\"signals\": [\"frame\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for framing signals. Detect any of: frame (conceptual boundaries, lens, or worldview), tension (competing forces, conflicts, or trade-offs), container (safe space for exploration or vulnerability). Return JSON like {{\"signals\": [\"frame\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', .States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -333,7 +320,7 @@
                                 "response_format": {
                                     "type": "json_object"
                                 },
-                                "prompt.$": "States.Format('Analyze the user input for meta signals. Detect any of: mode-drift (deviation from intended approach or style), alignment-gap (mismatch between intent and execution), trigger-match (recognition of sensitive or significant topics). Return JSON like {{\"signals\": [\"trigger-match\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. User input: \"{}\"', $.user_input)"
+                                "prompt.$": "States.Format('Analyze the user input for meta signals. Detect any of: mode-drift (deviation from intended approach or style), alignment-gap (mismatch between intent and execution), trigger-match (recognition of sensitive or significant topics). Return JSON like {{\"signals\": [\"trigger-match\"]}} or {{\"signals\": []}} if none detected. Use only the exact signal names provided. Conversation thread: \"{}\"', States.JsonToString($.thread))"
                             },
                             "Retry": [
                                 {
@@ -400,7 +387,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 400,
-                "prompt.$": "States.Format(\"You are the outer voice – a diagnostic companion.\\n\\nCurrent mode: {}\\n\\nMode guide:\\n- Analytical: surface assumptions, test structure.\\n- Clarifying: focus questions, one at a time.\\n- Exploratory: multiply perspectives, avoid early closure.\\n- Sequential Reasoning: trace logic with precision.\\n- Relational Presence: hold space, tread gently.\\n\\nUser Input: {}\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what’s presumed. Trace implications. Surface exclusions.\", $.behavioral_instructions.mode, $.user_input, $.behavioral_instructions.outer)"
+                "prompt.$": "States.Format(\"You are the outer voice – a diagnostic companion.\\n\\nCurrent mode: {}\\n\\nMode guide:\\n- Analytical: surface assumptions, test structure.\\n- Clarifying: focus questions, one at a time.\\n- Exploratory: multiply perspectives, avoid early closure.\\n- Sequential Reasoning: trace logic with precision.\\n- Relational Presence: hold space, tread gently.\\n\\nUser Input: {}\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what’s presumed. Trace implications. Surface exclusions.\", $.behavioral_instructions.mode, States.JsonToString($.thread), $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -846,7 +833,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.3,
                 "max_tokens.$": "$.behavioral_instructions.adaptations.maxTokens",
-                "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nUser input: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", $.user_input, $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction)"
+                "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nConversation thread: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", States.JsonToString($.thread), $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction)"
             },
             "ResultPath": "$.final_response",
             "Retry": [

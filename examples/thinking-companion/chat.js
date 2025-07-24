@@ -4,9 +4,9 @@ import { runThinkingCompanion } from './thinking-companion.js';
 
 class ThinkingCompanionChat {
     constructor(options = {}) {
+        this.currentExecution = null; // Track current execution
         this.options = {
-            showInternalDialogue: options.showInternalDialogue ?? true,
-            quiet: options.quiet ?? true,
+            showInternalDialogue: options.showInternalDialogue ?? false,
             ...options
         };
 
@@ -44,6 +44,19 @@ class ThinkingCompanionChat {
         this.rl.on('close', () => {
             console.log('\n👋 Goodbye! Thanks for thinking together.');
             process.exit(0);
+        });
+
+        process.on('SIGINT', async () => {
+            if (this.currentExecution) {
+                console.log(chalk.red('\n🛑 Interrupting... cancelling current thinking process.'));
+                // If using AbortController or custom cancel hook, trigger it here
+                this.currentExecution.cancel?.(); // optional
+                this.currentExecution = null;
+                this.rl.prompt(); // resume clean prompt
+            } else {
+                console.log(chalk.gray('\n👋 Ctrl+C again to exit.'));
+                process.exit(0);
+            }
         });
     }
 
@@ -103,12 +116,19 @@ Commands:
     }
 
     async processUserInput(userInput) {
+        this.rl.pause();
         try {
             console.log('\n🤔 Thinking...');
 
-            const [status, output] = await runThinkingCompanion(userInput, {
-                quiet: this.options.quiet
+            const newThread = [...this.conversationHistory.flatMap(m => [{ role: 'user', content: m.userInput }, { role: 'ai', content: m.response }]), { role: 'user', content: userInput }];
+
+            this.currentExecution = runThinkingCompanion(newThread, {
+                quiet: false,
+                log: this.logHook.bind(this),
             });
+
+            const [status, output] = await this.currentExecution;
+            this.currentExecution = null; // Clear current execution
 
             const response = output.final_response?.content || 'No response generated';
             const mode = output.behavioral_instructions?.mode || 'Unknown';
@@ -121,47 +141,17 @@ Commands:
             });
 
             // Render
-            if (!this.options.showInternalDialogue) {
-                console.log('\n🤖 AI Response:');
-                console.log(response);
-                console.log(chalk.dim(`   Mode: ${mode}`));
-            } else {
-                this.showInternalDialogue(output);
-                console.log(chalk.green('\n✨ Final Response:'));
-                console.log(response);
-                console.log(chalk.dim(`   Mode: ${mode}`));
-            }
-
-            console.log(); // Extra line for spacing
+            console.log('\n🤖 AI Response:');
+            console.log(response);
+            console.log(chalk.dim(`   Mode: ${mode}`));
 
         } catch (error) {
             console.error('\n❌ Error:', error.message);
+        } finally {
             console.log(); // Extra line for spacing
+            this.rl.resume();
+            this.rl.prompt();
         }
-    }
-
-    showInternalDialogue(output) {
-        console.log('\n🧵 Internal Dialogue:');
-
-        const messages = output.thread?.filter(msg =>
-            msg.role === 'outer' || msg.role === 'inner'
-        ) || [];
-
-        const turnCount = output.context?.turn_count ?? 'N/A';
-
-        if (messages.length === 0) {
-            console.log('  (No internal dialogue recorded)');
-            return;
-        }
-
-        messages.forEach((msg, index) => {
-            const icon = msg.role === 'outer' ? '🗣️' : '💭';
-            const label = msg.role === 'outer' ? 'Outer Voice' : 'Inner Voice';
-            console.log(`\n  ${icon} ${label}:`);
-            console.log(this.formatBlock(msg.content));
-        });
-
-        console.log(chalk.dim(`\n   🔄 Turn: ${turnCount}`));
     }
 
     formatBlock(text) {
@@ -186,13 +176,56 @@ Commands:
 
         return lines.join('\n');
     }
+
+    logHook(context, event, label, ...args) {
+        if (!this.options.showInternalDialogue) return;
+        const { stateKey } = context;
+
+        if (event === 'StateSucceed' && label === 'HandlerSucceeded') {
+            const output = args[0];
+            if (!output || typeof output !== 'object') return;
+
+            switch (stateKey) {
+                case 'AggregateSignals':
+                    console.log('\n🧠 Signal Analysis:\n' + '─'.repeat(32));
+                    for (const [className, detected] of Object.entries(output.signals || {})) {
+                        if (detected.length > 0) {
+                            console.log(`  ${className}: ${detected.join(', ')}`);
+                        }
+                    }
+                    break;
+
+                case 'OuterVoiceProposal':
+                    console.log('\n🗣️  Outer Voice Proposes:\n' + '─'.repeat(32));
+                    console.log(this.formatBlock(output.content));
+                    break;
+
+                case 'InnerVoiceResponse':
+                case 'InnerVoiceFinalResponse':
+                    if (output.content.trim().toLowerCase() !== 'agree') {
+                        console.log('\n💭 Inner Voice Responds:\n' + '─'.repeat(32));
+                        console.log(this.formatBlock(output.content));
+                    } else {
+                        console.log(chalk.dim('\n✅ Voices converged.'));
+                    }
+                    break;
+
+                case 'ReviseWithInnerFeedback':
+                    console.log('\n🔄 Outer Voice Revises:\n' + '─'.repeat(32));
+                    console.log(this.formatBlock(output.content));
+                    break;
+
+                default:
+                    break; // silent for other states
+            }
+        }
+    }
 }
 
 // Start the chat if running directly
 if (import.meta.url === `file://${process.argv[1]}`) {
     const chat = new ThinkingCompanionChat({
-        showInternalDialogue: true,
-        quiet: true
+        showInternalDialogue: true
     });
 
     chat.start().catch(error => {

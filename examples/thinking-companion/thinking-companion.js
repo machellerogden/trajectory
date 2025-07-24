@@ -31,21 +31,20 @@ const handlers = {
  * @param {Object} options - Optional configuration
  * @returns {Promise<[string, Object]>} - [status, output]
  */
-export async function runThinkingCompanion(userInput, options = {}) {
-    if (!userInput || typeof userInput !== 'string') {
-        throw new Error('User input is required and must be a string');
+export async function runThinkingCompanion(thread, options = {}) {
+    if (!thread?.length) {
+        throw new Error('Conversation thread is required.');
     }
 
     const context = {
         handlers,
         quiet: options.quiet !== false, // Default to quiet mode
-        log: thinkingCompanionLogger,
+        log: options.log || thinkingCompanionLogger,
         ...options.context
     };
 
     const input = {
-        user_input: userInput,
-        thread: [], // Start with empty conversation thread
+        thread,
         context: {
             turn_count: 0,
             max_turns: 5,
@@ -72,7 +71,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('---');
 
     try {
-        const [status, output] = await runThinkingCompanion(userInput, {
+        const [status, output] = await runThinkingCompanion([{role:"user",content:userInput}], {
             quiet: false,
             debug: true
         });

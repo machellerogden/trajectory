@@ -1,7 +1,58 @@
 {
     "Comment": "Minimal Thinking Companion PoC - Outer/Inner Voice with Stance Signal",
-    "StartAt": "ReceiveUserInput",
+    "StartAt": "CreatePromptDictionary",
     "States": {
+        "CreatePromptDictionary": {
+            "Type": "Pass",
+            "Parameters": {
+                "outer.logic.assumption": "Focus diagnostic energy on assumption tracing. Surface what's taken as given without examination.",
+                "outer.logic.implication": "Trace logical consequences methodically. What follows if this holds? What are the second-order effects?",
+                "outer.logic.missing-data": "Identify information gaps precisely. What evidence is needed to evaluate this claim?",
+                "outer.stance.overreach": "Exercise heightened epistemic humility. Test claim boundaries aggressively. Resist overconfident assertions.",
+                "outer.stance.uncertainty": "Acknowledge unknowns explicitly. Use 'I don't know' when appropriate. Distinguish data from inference.",
+                "outer.stance.speculation": "Distinguish clearly between data, inference, and speculation. Mark exploratory reasoning as such.",
+                "outer.rhythm.stalling": "Use brevity to create movement. Focus on one core diagnostic question. Consider strike-claim readiness.",
+                "outer.rhythm.cognitive-load": "Reduce complexity. Break down into simpler diagnostic components. Use clearer structure.",
+                "outer.rhythm.pacing": "Match the user's information processing speed. Adjust depth accordingly.",
+                "outer.rhythm.flow": "Support smooth progression. Build on previous insights without repetition.",
+                "outer.affect.witness-call": "Provide spacious acknowledgment first. Validate without rushing to diagnostic work.",
+                "outer.affect.valence": "Attune to emotional tone while maintaining diagnostic rigor. Adjust intensity appropriately.",
+                "outer.affect.relational-mode": "Calibrate engagement style to relational needs while preserving epistemic stance.",
+                "outer.framing.frame": "Examine conceptual boundaries. What worldview or lens is operating here? What's included/excluded?",
+                "outer.framing.tension": "Surface competing forces explicitly. Hold paradox without premature resolution.",
+                "outer.framing.container": "Create safe space for vulnerable exploration while maintaining diagnostic precision.",
+                "outer.meta.mode-drift": "Recalibrate to diagnostic stance immediately. Return to assumption-exposing, claim-testing positioning.",
+                "outer.meta.alignment-gap": "Address mismatch between stated intent and execution. Surface the disconnect.",
+                "outer.meta.trigger-match": "Recognize sensitive terrain. Proceed with diagnostic work while respecting the stakes.",
+                "inner.logic.assumption": "What foundational assumption is invisible here? What's being taken as obviously true?",
+                "inner.logic.implication": "What consequences are being ignored? What follows that hasn't been considered?",
+                "inner.logic.missing-data": "What crucial information is absent? What questions aren't being asked?",
+                "inner.stance.overreach": "What claims exceed the available evidence? Where is certainty masking uncertainty?",
+                "inner.stance.uncertainty": "What unknowns are being glossed over? Where should doubt be more explicit?",
+                "inner.stance.speculation": "What's being presented as fact that's actually inference or speculation?",
+                "inner.rhythm.stalling": "Is this diagnostic work moving toward insight or cycling in place? Are we avoiding something?",
+                "inner.rhythm.cognitive-load": "Is the complexity serving clarity or creating confusion? What's essential vs. elaborate?",
+                "inner.rhythm.pacing": "Is the rhythm matching the user's capacity or pushing beyond it?",
+                "inner.rhythm.flow": "Are we building coherently or jumping between disconnected observations?",
+                "inner.affect.witness-call": "What emotional need is present but unaddressed? What requires acknowledgment before analysis?",
+                "inner.affect.valence": "What emotional reality is being excluded from this frame? What feeling is being avoided?",
+                "inner.affect.relational-mode": "How is the relational dynamic affecting the inquiry? What's the underlying connection need?",
+                "inner.framing.frame": "What perspectives are excluded from this worldview? Who or what is rendered invisible?",
+                "inner.framing.tension": "What opposing forces are being overlooked? What contradiction is being smoothed over?",
+                "inner.framing.container": "What vulnerability or risk is this safe space meant to hold? What's the underlying need?",
+                "inner.meta.mode-drift": "Are we maintaining diagnostic rigor or slipping into pleasing? Where's the epistemic edge?",
+                "inner.meta.alignment-gap": "What's the disconnect between espoused values and actual behavior in this response?",
+                "inner.meta.trigger-match": "What sensitive element requires more careful attention? What's at stake that we're not naming?",
+                "adaptation.cognitive-load": "Use shorter, clearer responses. Break complex ideas into digestible pieces.",
+                "adaptation.stalling": "Be brief and direct. Create space for movement rather than filling it with analysis.",
+                "adaptation.pacing": "Match the user's information processing rhythm.",
+                "adaptation.flow": "Support natural progression without forcing artificial structure.",
+                "adaptation.witness-call": "Allow space for acknowledgment and validation. Don't rush to problem-solving.",
+                "adaptation.uncertainty": "Be comfortable with 'I don't know' and partial answers. Resist false certainty."
+            },
+            "ResultPath": "$.prompts",
+            "Next": "ReceiveUserInput"
+        },
         "ReceiveUserInput": {
             "Type": "Task",
             "Resource": "appendUserMessage",
@@ -324,9 +375,9 @@
         },
         "AggregateSignals": {
             "Type": "Task",
-            "Resource": "aggregateSignals",
+            "Resource": "aggregateSignalsFromResults",
             "Parameters": {
-                "distillerResults.$": "$.distiller_results"
+                "results.$": "$.distiller_results"
             },
             "ResultPath": "$.signals",
             "Next": "GenerateBehavioralInstructions"
@@ -335,7 +386,8 @@
             "Type": "Task",
             "Resource": "generateBehavioralInstructions",
             "Parameters": {
-                "signals.$": "$.signals.signals"
+                "signals.$": "$.signals.signals",
+                "prompts.$": "$.prompts"
             },
             "ResultPath": "$.behavioral_instructions",
             "Next": "OuterVoiceProposal"
@@ -348,7 +400,7 @@
                 "model": "gpt-4o",
                 "temperature": 0.4,
                 "max_tokens": 200,
-                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims. The user input: {}\\n\\nDetected signals: {}\\nSignal-specific behavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions. Be precise, resistant to pleasing. Address the inner voice directly with your diagnostic observations and the claim boundaries you've identified.\\n\\nFocus your diagnostic energy according to the signal-specific instructions above. What assumptions are embedded? What's being taken as given? What follows if this holds?\\n\\nConversation history: {}\", $.user_input, States.JsonToString($.signals.signals), $.behavioral_instructions.outer || 'None detected', States.JsonToString($.thread))"
+                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims.\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions.\", $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -489,6 +541,9 @@
                 "model": "gpt-4o",
                 "temperature": 0.1,
                 "max_tokens": 400,
+                "response_format": {
+                    "type": "json_object"
+                },
                 "prompt.$": "States.Format(\"Analyze this conversation comprehensively for patterns and intervention needs.\\n\\nConversation history: {}\\n\\nAnalyze for:\\n\\n1. STALLING PATTERNS:\\n   - Recursive analysis without meaningful progression\\n   - Analysis paralysis or cycling without resolution\\n   - Repetitive themes that don't deepen\\n\\n2. PROGRESSION QUALITY:\\n   - Are new insights building on previous ones?\\n   - Is conversation advancing or cycling?\\n   - Quality of turn-to-turn development\\n\\n3. THEMATIC LOOPS:\\n   - Repeated themes across multiple turns\\n   - Conceptual cycling (assumptions, implications, analysis)\\n   - Topics that repeat without resolution\\n\\n4. DECISION AVOIDANCE:\\n   - Excessive hedging language (maybe, perhaps, might)\\n   - Complexity introduced to delay decisions\\n   - Requests for more analysis when sufficient exists\\n\\nReturn JSON only:\\n{{\\n  \\\"stallingRisk\\\": 0.0-1.0,\\n  \\\"recursionDetected\\\": boolean,\\n  \\\"progressionScore\\\": 0.0-1.0,\\n  \\\"thematicLoops\\\": [\\\"theme1\\\", \\\"theme2\\\"],\\n  \\\"avoidanceDetected\\\": boolean,\\n  \\\"hedgingLevel\\\": \\\"low|medium|high\\\",\\n  \\\"recommendations\\\": [\\\"strike-claim-ready\\\", \\\"decision-avoidance\\\"],\\n  \\\"reasoning\\\": \\\"brief explanation of key patterns detected\\\"\\n}}\", States.JsonToString($.thread))"
             },
             "ResultPath": "$.conversation_analysis_result",
@@ -522,37 +577,33 @@
             "Next": "AggregateConversationAnalysis"
         },
         "AggregateConversationAnalysis": {
-            "Type": "Task",
-            "Resource": "aggregateConversationAnalysis",
+            "Type": "Pass",
             "Parameters": {
-                "analysisResult.$": "$.conversation_analysis_result",
-                "context.$": "$.context"
+                "conversation_patterns.$": "States.StringToJson($.conversation_analysis_result.content)"
             },
             "ResultPath": "$.conversation_patterns",
             "Next": "CheckConvergence"
         },
         "CheckConvergence": {
-            "Type": "Task",
-            "Resource": "checkConvergence",
-            "Parameters": {
-                "innerResponse.$": "$.inner_response",
-                "context.$": "$.context"
-            },
-            "ResultPath": "$.convergence_result",
-            "Next": "RouteBasedOnConvergence"
-        },
-        "RouteBasedOnConvergence": {
             "Type": "Choice",
             "Choices": [
                 {
-                    "Variable": "$.convergence_result.action",
-                    "StringEquals": "final_response",
+                    "And": [
+                        {
+                            "Variable": "$.inner_response.content",
+                            "IsPresent": true
+                        },
+                        {
+                            "Variable": "$.inner_response.content",
+                            "StringEquals": "agree"
+                        }
+                    ],
                     "Next": "GenerateFinalResponse"
                 },
                 {
-                    "Variable": "$.convergence_result.action",
-                    "StringEquals": "check_strike_claim",
-                    "Next": "CheckStrikeClaimReadiness"
+                    "Variable": "$.context.turn_count",
+                    "NumericGreaterThanEquals": 3,
+                    "Next": "GenerateFinalResponse"
                 }
             ],
             "Default": "CheckStrikeClaimReadiness"
@@ -577,12 +628,112 @@
             "Default": "ReviseWithInnerFeedback"
         },
         "DeliverStrikeClaim": {
-            "Type": "Task",
-            "Resource": "generateStrikeClaim",
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.conversation_patterns.recommendations[0]",
+                    "StringEquals": "assumption-overanalysis",
+                    "Next": "StrikeClaimAssumptionOveranalysis"
+                },
+                {
+                    "Variable": "$.conversation_patterns.recommendations[0]",
+                    "StringEquals": "low-progression", 
+                    "Next": "StrikeClaimLowProgression"
+                },
+                {
+                    "Variable": "$.conversation_patterns.recommendations[0]",
+                    "StringEquals": "decision-avoidance",
+                    "Next": "StrikeClaimDecisionAvoidance"
+                },
+                {
+                    "Variable": "$.conversation_patterns.recommendations[0]",
+                    "StringEquals": "excessive-hedging",
+                    "Next": "StrikeClaimExcessiveHedging"
+                }
+            ],
+            "Default": "StrikeClaimGeneralStalling"
+        },
+        "StrikeClaimAssumptionOveranalysis": {
+            "Type": "Pass",
             "Parameters": {
-                "userInput.$": "$.user_input",
-                "conversationPatterns.$": "$.conversation_patterns",
-                "context.$": "$.context"
+                "strike_claims": [
+                    "You're dissecting assumptions that are already clear. Move forward.",
+                    "This assumption analysis is stalling. What's the real question?",
+                    "You already know what you're assuming. What are you avoiding?"
+                ],
+                "random_index.$": "States.MathFloor(States.MathRandom() * 3)",
+                "content.$": "States.ArrayGetItem($.strike_claims, $.random_index)",
+                "type": "strike-claim",
+                "triggered_by.$": "$.conversation_patterns.recommendations",
+                "stalling_risk.$": "$.conversation_patterns.stallingRisk"
+            },
+            "ResultPath": "$.strike_claim",
+            "Next": "GenerateFinalResponse"
+        },
+        "StrikeClaimLowProgression": {
+            "Type": "Pass",
+            "Parameters": {
+                "strike_claims": [
+                    "You're cycling through the same analysis without moving deeper.",
+                    "This isn't complexity. It's hesitation dressed as rigor.",
+                    "You're analyzing instead of deciding. What's the real block?"
+                ],
+                "random_index.$": "States.MathFloor(States.MathRandom() * 3)",
+                "content.$": "States.ArrayGetItem($.strike_claims, $.random_index)",
+                "type": "strike-claim",
+                "triggered_by.$": "$.conversation_patterns.recommendations",
+                "stalling_risk.$": "$.conversation_patterns.stallingRisk"
+            },
+            "ResultPath": "$.strike_claim",
+            "Next": "GenerateFinalResponse"
+        },
+        "StrikeClaimDecisionAvoidance": {
+            "Type": "Pass",
+            "Parameters": {
+                "strike_claims": [
+                    "You already know what you want. You're stalling.",
+                    "All this 'it depends' is avoiding the choice you need to make.",
+                    "You're using complexity to delay a decision that's simpler than you're making it."
+                ],
+                "random_index.$": "States.MathFloor(States.MathRandom() * 3)",
+                "content.$": "States.ArrayGetItem($.strike_claims, $.random_index)",
+                "type": "strike-claim",
+                "triggered_by.$": "$.conversation_patterns.recommendations",
+                "stalling_risk.$": "$.conversation_patterns.stallingRisk"
+            },
+            "ResultPath": "$.strike_claim",
+            "Next": "GenerateFinalResponse"
+        },
+        "StrikeClaimExcessiveHedging": {
+            "Type": "Pass",
+            "Parameters": {
+                "strike_claims": [
+                    "Drop the maybe. What do you actually think?",
+                    "Enough hedging. Take a position.",
+                    "You're hiding behind uncertainty. What's your actual view?"
+                ],
+                "random_index.$": "States.MathFloor(States.MathRandom() * 3)",
+                "content.$": "States.ArrayGetItem($.strike_claims, $.random_index)",
+                "type": "strike-claim",
+                "triggered_by.$": "$.conversation_patterns.recommendations",
+                "stalling_risk.$": "$.conversation_patterns.stallingRisk"
+            },
+            "ResultPath": "$.strike_claim",
+            "Next": "GenerateFinalResponse"
+        },
+        "StrikeClaimGeneralStalling": {
+            "Type": "Pass",
+            "Parameters": {
+                "strike_claims": [
+                    "You're stuck in analysis mode. What action does this point toward?",
+                    "This exploration has hit a loop. What's the real question underneath?",
+                    "You're thinking in circles. What would move this forward?"
+                ],
+                "random_index.$": "States.MathFloor(States.MathRandom() * 3)",
+                "content.$": "States.ArrayGetItem($.strike_claims, $.random_index)",
+                "type": "strike-claim",
+                "triggered_by.$": "$.conversation_patterns.recommendations",
+                "stalling_risk.$": "$.conversation_patterns.stallingRisk"
             },
             "ResultPath": "$.strike_claim",
             "Next": "GenerateFinalResponse"

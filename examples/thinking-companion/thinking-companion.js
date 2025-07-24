@@ -19,12 +19,10 @@ const handlers = {
     'incrementTurns': tasks.incrementTurns,
     'appendMessageToThread': tasks.appendMessageToThread,
     'extractFinalOuterMessage': tasks.extractFinalOuterMessage,
-    'aggregateSignals': tasks.aggregateSignals,
     'generateBehavioralInstructions': tasks.generateBehavioralInstructions,
     'analyzeConversationPatterns': tasks.analyzeConversationPatterns,
-    'aggregateConversationAnalysis': tasks.aggregateConversationAnalysis,
-    'generateStrikeClaim': tasks.generateStrikeClaim,
-    'checkConvergence': tasks.checkConvergence
+    'aggregateSignalsFromResults': tasks.aggregateSignalsFromResults,
+    'debugLog': tasks.debugLog
 };
 
 /**

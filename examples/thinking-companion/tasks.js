@@ -1,5 +1,5 @@
 import { callLLM as providerCallLLM } from './providers.js';
-import { validateSignals, createEmptySignals, interpretSignalsForOuterVoice, interpretSignalsForInnerVoice, interpretSignalsForResponseAdaptation, getSignalClassNames } from './signal-classes.js';
+import { getSignalClassNames } from './signal-classes.js';
 
 /**
  * Appends a user message to the conversation thread
@@ -105,61 +105,109 @@ export function extractFinalOuterMessage({ thread = [] }) {
 }
 
 
+
 /**
- * Aggregates results from parallel signal distillers into structured signals object
+ * Generate behavioral instructions for both voices based on detected signals using prompt dictionary
  */
-export function aggregateSignals({ distillerResults }) {
-    if (!Array.isArray(distillerResults)) {
-        throw new Error('Distiller results must be an array');
+export function generateBehavioralInstructions({ signals, prompts }) {
+    if (!signals || typeof signals !== 'object' || !prompts) {
+        return {
+            outer: 'None detected',
+            inner: 'None detected', 
+            adaptations: { maxTokens: null, instruction: 'None detected' }
+        };
     }
 
-    const signals = createEmptySignals();
-    const errors = [];
+    const outerInstructions = [];
+    const innerInstructions = [];
+    const adaptationInstructions = [];
     
-    // Map parallel branch names to signal classes
-    const branchToSignalClass = {
-        0: 'logic',      // LogicDistiller
-        1: 'stance',     // StanceDistiller
-        2: 'rhythm',     // RhythmDistiller
-        3: 'affect',     // AffectDistiller
-        4: 'framing',    // FramingDistiller
-        5: 'meta'        // MetaDistiller
-    };
-
-    // Process each distiller result
-    for (let i = 0; i < distillerResults.length; i++) {
-        const result = distillerResults[i];
-        const signalClass = branchToSignalClass[i];
+    // Process each signal class and detected signals
+    for (const [className, detectedSignals] of Object.entries(signals)) {
+        if (!Array.isArray(detectedSignals) || detectedSignals.length === 0) continue;
         
-        if (!result || typeof result !== 'object') {
-            errors.push(`Invalid distiller result format for ${signalClass}`);
-            continue;
+        for (const signal of detectedSignals) {
+            // Build keys for prompt dictionary lookup
+            const outerKey = `outer.${className}.${signal}`;
+            const innerKey = `inner.${className}.${signal}`;
+            const adaptationKey = `adaptation.${signal}`;
+            
+            // Collect instructions from prompt dictionary
+            if (prompts[outerKey]) {
+                outerInstructions.push(`${className}.${signal}: ${prompts[outerKey]}`);
+            }
+            if (prompts[innerKey]) {
+                innerInstructions.push(`${className}.${signal}: ${prompts[innerKey]}`);
+            }
+            if (prompts[adaptationKey]) {
+                adaptationInstructions.push(prompts[adaptationKey]);
+            }
         }
-
-        // Handle different result formats (LLM response vs fallback)
-        let detectedSignals = [];
-        if (result.content) {
-            // Parse JSON from LLM response using existing parseLLMResult pattern
-            const parsed = parseLLMResult(result, { signals: [] });
-            detectedSignals = parsed.signals || [];
-        } else if (result.signals) {
-            // Direct signals array (shouldn't happen with new format, but keep for safety)
-            detectedSignals = result.signals;
+    }
+    
+    // Determine max tokens based on rhythm signals (preserve existing logic)
+    let maxTokens = null;
+    if (signals.rhythm && Array.isArray(signals.rhythm)) {
+        for (const signal of signals.rhythm) {
+            switch (signal) {
+                case 'cognitive-load':
+                    maxTokens = maxTokens === null ? 150 : Math.min(maxTokens, 150);
+                    break;
+                case 'stalling':
+                    maxTokens = maxTokens === null ? 100 : Math.min(maxTokens, 100);
+                    break;
+                case 'witness-call':
+                    maxTokens = maxTokens === null ? 200 : Math.min(maxTokens, 200);
+                    break;
+            }
         }
-
-        // Ensure we have an array
-        if (!Array.isArray(detectedSignals)) {
-            console.warn(`Invalid signal format for ${signalClass}: expected array`);
-            detectedSignals = [];
-        }
-
-        signals[signalClass] = detectedSignals;
     }
 
-    // Validate the aggregated signals
-    const validation = validateSignals(signals);
-    if (!validation.valid) {
-        errors.push(...validation.errors);
+    return {
+        outer: outerInstructions.length > 0 ? outerInstructions.join('\n\n') : 'None detected',
+        inner: innerInstructions.length > 0 ? innerInstructions.join('\n\n') : 'None detected',
+        adaptations: { 
+            maxTokens: maxTokens, 
+            instruction: adaptationInstructions.length > 0 ? adaptationInstructions.join(' ') : 'None detected'
+        }
+    };
+}
+
+
+/**
+ * Aggregate signals from distiller results using proper JSON parsing
+ */
+export function aggregateSignalsFromResults({ results }) {
+    const signalTypes = ['logic', 'stance', 'rhythm', 'affect', 'framing', 'meta'];
+    const signals = {};
+    const errors = [];
+
+    // Initialize all signal types with empty arrays
+    for (const signalType of signalTypes) {
+        signals[signalType] = [];
+    }
+
+    if (!Array.isArray(results)) {
+        errors.push('Results is not an array');
+        return { signals, errors, valid: false };
+    }
+
+    // Process available results
+    for (let i = 0; i < Math.min(results.length, signalTypes.length); i++) {
+        const signalType = signalTypes[i];
+        try {
+            const result = results[i];
+            if (result && result.content) {
+                const parsed = JSON.parse(result.content);
+                signals[signalType] = parsed.signals || [];
+            } else {
+                signals[signalType] = [];
+                errors.push(`Missing content for ${signalType} distiller`);
+            }
+        } catch (error) {
+            signals[signalType] = [];
+            errors.push(`Failed to parse ${signalType} signals: ${error.message}`);
+        }
     }
 
     return {
@@ -170,77 +218,11 @@ export function aggregateSignals({ distillerResults }) {
 }
 
 /**
- * Generate behavioral instructions for both voices based on detected signals
+ * Debug logging function
  */
-export function generateBehavioralInstructions({ signals }) {
-    if (!signals || typeof signals !== 'object') {
-        return {
-            outer: null,
-            inner: null,
-            adaptations: { maxTokens: null, instruction: null }
-        };
-    }
-
-    const outerInstructions = interpretSignalsForOuterVoice(signals);
-    const innerInstructions = interpretSignalsForInnerVoice(signals);
-    const adaptations = interpretSignalsForResponseAdaptation(signals);
-
-    return {
-        outer: outerInstructions,
-        inner: innerInstructions,
-        adaptations: adaptations
-    };
-}
-
-/**
- * Aggregate results from consolidated conversation analysis LLM call
- */
-export function aggregateConversationAnalysis({ analysisResult, context = {} }) {
-    if (!analysisResult) {
-        throw new Error('analysisResult is required');
-    }
-
-    // Parse comprehensive LLM result
-    const analysis = parseLLMResult(analysisResult, {
-        stallingRisk: 0,
-        recursionDetected: false,
-        progressionScore: 0.5,
-        thematicLoops: [],
-        avoidanceDetected: false,
-        hedgingLevel: 'low',
-        recommendations: [],
-        reasoning: ''
-    });
-
-    // Create patterns object in expected format for downstream states
-    const patterns = {
-        stallingRisk: analysis.stallingRisk,
-        recursionDetected: analysis.recursionDetected,
-        progressionScore: analysis.progressionScore,
-        thematicLoops: analysis.thematicLoops,
-        recommendations: analysis.recommendations || []
-    };
-
-    // Ensure essential recommendations are included based on analysis
-    if (patterns.stallingRisk > 0.6 && patterns.recursionDetected) {
-        if (!patterns.recommendations.includes('strike-claim-ready')) {
-            patterns.recommendations.push('strike-claim-ready');
-        }
-    }
-
-    if (analysis.avoidanceDetected || analysis.hedgingLevel === 'high') {
-        if (!patterns.recommendations.includes('decision-avoidance')) {
-            patterns.recommendations.push('decision-avoidance');
-        }
-    }
-
-    if (patterns.progressionScore < 0.3) {
-        if (!patterns.recommendations.includes('low-progression')) {
-            patterns.recommendations.push('low-progression');
-        }
-    }
-
-    return patterns;
+export function debugLog({ message, data }) {
+    console.log(`🐛 DEBUG: ${message}`, JSON.stringify(data, null, 2));
+    return { logged: true };
 }
 
 /**
@@ -319,82 +301,7 @@ function findCommonWords(messages) {
     return [...words1].filter(word => words2.has(word));
 }
 
-/**
- * Generate a direct strike-claim intervention based on detected stalling patterns
- */
-export function generateStrikeClaim({ userInput, conversationPatterns, context }) {
-    const strikeClaims = {
-        'assumption-overanalysis': [
-            "You're dissecting assumptions that are already clear. Move forward.",
-            "This assumption analysis is stalling. What's the real question?",
-            "You already know what you're assuming. What are you avoiding?"
-        ],
-        'low-progression': [
-            "You're cycling through the same analysis without moving deeper.",
-            "This isn't complexity. It's hesitation dressed as rigor.",
-            "You're analyzing instead of deciding. What's the real block?"
-        ],
-        'decision-avoidance': [
-            "You already know what you want. You're stalling.",
-            "All this 'it depends' is avoiding the choice you need to make.",
-            "You're using complexity to delay a decision that's simpler than you're making it."
-        ],
-        'excessive-hedging': [
-            "Drop the maybe. What do you actually think?",
-            "Enough hedging. Take a position.",
-            "You're hiding behind uncertainty. What's your actual view?"
-        ],
-        'general-stalling': [
-            "You're stuck in analysis mode. What action does this point toward?",
-            "This exploration has hit a loop. What's the real question underneath?",
-            "You're thinking in circles. What would move this forward?"
-        ]
-    };
 
-    // Determine which type of strike claim to use based on patterns
-    let selectedClaims = strikeClaims['general-stalling']; // Default
-
-    if (conversationPatterns.recommendations) {
-        for (const recommendation of conversationPatterns.recommendations) {
-            if (strikeClaims[recommendation]) {
-                selectedClaims = strikeClaims[recommendation];
-                break;
-            }
-        }
-    }
-
-    // Select a random strike claim from the appropriate category
-    const claimIndex = Math.floor(Math.random() * selectedClaims.length);
-    const selectedClaim = selectedClaims[claimIndex];
-
-    return {
-        content: selectedClaim,
-        type: 'strike-claim',
-        triggered_by: conversationPatterns.recommendations || ['general-stalling'],
-        stalling_risk: conversationPatterns.stallingRisk
-    };
-}
-
-/**
- * Check convergence conditions and determine next action
- */
-export function checkConvergence({ innerResponse, context }) {
-    // Check if inner voice agreed
-    if (innerResponse && innerResponse.content && innerResponse.content.trim().toLowerCase() === 'agree') {
-        return { action: 'final_response', reason: 'inner_voice_agreement' };
-    }
-
-    // Check if we've reached max turns
-    const turnCount = context.turn_count || 0;
-    const maxTurns = context.max_turns || 3;
-
-    if (turnCount >= maxTurns) {
-        return { action: 'final_response', reason: 'max_turns_reached', turn_count: turnCount, max_turns: maxTurns };
-    }
-
-    // Continue with strike claim check
-    return { action: 'check_strike_claim', turn_count: turnCount, max_turns: maxTurns };
-}
 
 /**
  * Detect signals in a single input (simplified version of our parallel detection)

@@ -147,12 +147,12 @@ export function generateBehavioralInstructions({ signals, prompts }) {
     }
 
     const rhythmTokenGuidance = {
-        'stalling': { max: 100, priority: 3 },
-        'cognitive-load': { max: 150, priority: 2 },
-        'witness-call': { max: 300, priority: 1 }
+        'stalling': { max: 200, priority: 3 },
+        'cognitive-load': { max: 300, priority: 2 },
+        'witness-call': { max: 500, priority: 1 }
     };
 
-    let maxTokens = 400;
+    let maxTokens = 1000;
     let topPriority = 0;
 
     if (signals.rhythm && Array.isArray(signals.rhythm)) {

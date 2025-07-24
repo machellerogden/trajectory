@@ -19,7 +19,6 @@ const handlers = {
     'incrementTurns': tasks.incrementTurns,
     'appendMessageToThread': tasks.appendMessageToThread,
     'extractFinalOuterMessage': tasks.extractFinalOuterMessage,
-    'distillSignals': tasks.distillSignals,
     'aggregateSignals': tasks.aggregateSignals,
     'generateBehavioralInstructions': tasks.generateBehavioralInstructions,
     'analyzeConversationPatterns': tasks.analyzeConversationPatterns,

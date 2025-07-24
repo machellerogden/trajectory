@@ -1,5 +1,5 @@
 import { callLLM as providerCallLLM } from './providers.js';
-import { createDistillerPrompt, validateSignals, createEmptySignals, interpretSignalsForOuterVoice, interpretSignalsForInnerVoice, interpretSignalsForResponseAdaptation, getSignalClassNames } from './signal-classes.js';
+import { validateSignals, createEmptySignals, interpretSignalsForOuterVoice, interpretSignalsForInnerVoice, interpretSignalsForResponseAdaptation, getSignalClassNames } from './signal-classes.js';
 
 /**
  * Appends a user message to the conversation thread
@@ -16,7 +16,7 @@ export function appendUserMessage({ thread = [], message }) {
  * Calls an LLM provider with the given parameters
  */
 export async function callLLM(params) {
-    const { provider, model, temperature, max_tokens, prompt } = params;
+    const { provider, model, temperature, max_tokens, prompt, response_format } = params;
 
     if (!provider) {
         throw new Error('Provider is required');
@@ -32,7 +32,8 @@ export async function callLLM(params) {
             model,
             temperature,
             max_tokens,
-            prompt
+            prompt,
+            response_format
         });
 
         return result;
@@ -103,64 +104,6 @@ export function extractFinalOuterMessage({ thread = [] }) {
     return outerMessages[outerMessages.length - 1];
 }
 
-/**
- * Distills signals from user input for a specific signal class
- */
-export async function distillSignals({ signalClass, userInput }) {
-    if (!signalClass || !userInput) {
-        throw new Error('Signal class and user input are required');
-    }
-
-    try {
-        const prompt = createDistillerPrompt(signalClass, userInput);
-
-        const result = await providerCallLLM({
-            provider: 'openai',
-            model: '4o-mini',
-            temperature: 0,
-            max_tokens: 50, // Allow more tokens for JSON arrays
-            prompt
-        });
-
-        // Parse the JSON response (handle code blocks)
-        let detectedSignals;
-        try {
-            let content = result.content.trim();
-
-            // Remove code block markers if present
-            if (content.startsWith('```json')) {
-                content = content.replace(/```json\s*/, '').replace(/\s*```$/, '');
-            } else if (content.startsWith('```')) {
-                content = content.replace(/```\s*/, '').replace(/\s*```$/, '');
-            }
-
-            detectedSignals = JSON.parse(content);
-        } catch (parseError) {
-            console.warn(`Failed to parse signals for ${signalClass}: ${result.content}`);
-            detectedSignals = [];
-        }
-
-        // Ensure we have an array
-        if (!Array.isArray(detectedSignals)) {
-            console.warn(`Invalid signal format for ${signalClass}: expected array`);
-            detectedSignals = [];
-        }
-
-        return {
-            signalClass,
-            signals: detectedSignals,
-            rawResponse: result.content
-        };
-
-    } catch (error) {
-        console.error(`Signal distillation failed for ${signalClass}:`, error.message);
-        return {
-            signalClass,
-            signals: [],
-            error: error.message
-        };
-    }
-}
 
 /**
  * Aggregates results from parallel signal distillers into structured signals object
@@ -172,24 +115,45 @@ export function aggregateSignals({ distillerResults }) {
 
     const signals = createEmptySignals();
     const errors = [];
+    
+    // Map parallel branch names to signal classes
+    const branchToSignalClass = {
+        0: 'logic',      // LogicDistiller
+        1: 'stance',     // StanceDistiller
+        2: 'rhythm',     // RhythmDistiller
+        3: 'affect',     // AffectDistiller
+        4: 'framing',    // FramingDistiller
+        5: 'meta'        // MetaDistiller
+    };
 
     // Process each distiller result
-    for (const result of distillerResults) {
+    for (let i = 0; i < distillerResults.length; i++) {
+        const result = distillerResults[i];
+        const signalClass = branchToSignalClass[i];
+        
         if (!result || typeof result !== 'object') {
-            errors.push('Invalid distiller result format');
+            errors.push(`Invalid distiller result format for ${signalClass}`);
             continue;
         }
 
-        const { signalClass, signals: detectedSignals, error } = result;
-
-        if (error) {
-            errors.push(`${signalClass}: ${error}`);
-            continue;
+        // Handle different result formats (LLM response vs fallback)
+        let detectedSignals = [];
+        if (result.content) {
+            // Parse JSON from LLM response using existing parseLLMResult pattern
+            const parsed = parseLLMResult(result, { signals: [] });
+            detectedSignals = parsed.signals || [];
+        } else if (result.signals) {
+            // Direct signals array (shouldn't happen with new format, but keep for safety)
+            detectedSignals = result.signals;
         }
 
-        if (signalClass && Array.isArray(detectedSignals)) {
-            signals[signalClass] = detectedSignals;
+        // Ensure we have an array
+        if (!Array.isArray(detectedSignals)) {
+            console.warn(`Invalid signal format for ${signalClass}: expected array`);
+            detectedSignals = [];
         }
+
+        signals[signalClass] = detectedSignals;
     }
 
     // Validate the aggregated signals

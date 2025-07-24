@@ -9,7 +9,7 @@ export class OpenAIProvider {
         this.baseURL = 'https://api.openai.com/v1/chat/completions';
     }
 
-    async call({ model = 'gpt-4o', temperature = 0.7, max_tokens = null, prompt }) {
+    async call({ model = 'gpt-4o', temperature = 0.7, max_tokens = null, prompt, response_format = null }) {
         if (!prompt) {
             throw new Error('Prompt is required');
         }
@@ -27,6 +27,10 @@ export class OpenAIProvider {
 
         if (max_tokens) {
             body.max_tokens = max_tokens;
+        }
+
+        if (response_format) {
+            body.response_format = response_format;
         }
 
         try {

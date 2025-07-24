@@ -23,6 +23,7 @@ const handlers = {
     'aggregateSignals': tasks.aggregateSignals,
     'generateBehavioralInstructions': tasks.generateBehavioralInstructions,
     'analyzeConversationPatterns': tasks.analyzeConversationPatterns,
+    'aggregateConversationAnalysis': tasks.aggregateConversationAnalysis,
     'generateStrikeClaim': tasks.generateStrikeClaim,
     'checkConvergence': tasks.checkConvergence
 };
@@ -76,6 +77,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         const [status, output] = await runThinkingCompanion(userInput, { 
             quiet: false
         });
+        
+        // Display final response
+        if (output.final_response) {
+            console.log('\n✨ Final Response:');
+            console.log('─'.repeat(32));
+            console.log(output.final_response.content);
+            
+            if (output.final_response.type === 'strike-claim') {
+                console.log(`\n⚡ Strike-claim triggered by: ${output.final_response.triggered_by?.join(', ')}`);
+            }
+        } else {
+            console.log('\n⚠️ No final response generated');
+        }
         
     } catch (error) {
         console.error('❌ Error:', error.message);

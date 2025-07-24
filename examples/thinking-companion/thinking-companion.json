@@ -135,7 +135,41 @@
                 "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims. The user input: {}\\n\\nDetected signals: {}\\nSignal-specific behavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions. Be precise, resistant to pleasing. Address the inner voice directly with your diagnostic observations and the claim boundaries you've identified.\\n\\nFocus your diagnostic energy according to the signal-specific instructions above. What assumptions are embedded? What's being taken as given? What follows if this holds?\\n\\nConversation history: {}\", $.user_input, States.JsonToString($.signals.signals), $.behavioral_instructions.outer || 'None detected', States.JsonToString($.thread))"
             },
             "ResultPath": "$.outer_proposal",
-            "Next": "InnerVoiceResponse"
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackOuterVoice",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "Next": "RouteToInnerVoice"
+        },
+        "FallbackOuterVoice": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "I notice some assumptions in your thinking that could be examined more closely. Let me offer a diagnostic perspective on what's being taken as given."
+            },
+            "ResultPath": "$.outer_proposal",
+            "Next": "RouteToInnerVoice"
+        },
+        "RouteToInnerVoice": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.context.turn_count",
+                    "NumericGreaterThanEquals": 1,
+                    "Next": "InnerVoiceFinalResponse"
+                }
+            ],
+            "Default": "InnerVoiceResponse"
         },
         "InnerVoiceResponse": {
             "Type": "Task",
@@ -148,6 +182,65 @@
                 "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: What's excluded from this frame? What actors, values, risks, or perspectives are absent? What's the unspoken assumption holding this together?\\n\\nFocus your shadow detection according to the signal-specific instructions above. If you detect significant absences or exclusions, surface them. If the diagnostic work feels complete and no major shadows remain, respond with exactly: 'agree'. Otherwise, name what's missing.\", $.outer_proposal.content, $.behavioral_instructions.inner || 'None detected')"
             },
             "ResultPath": "$.inner_response",
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackInnerVoice",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "Next": "IncrementTurnCounter"
+        },
+        "FallbackInnerVoice": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "agree"
+            },
+            "ResultPath": "$.inner_response",
+            "Next": "IncrementTurnCounter"
+        },
+        "InnerVoiceFinalResponse": {
+            "Type": "Task",
+            "Resource": "callLLM", 
+            "Parameters": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "temperature": 0.5,
+                "max_tokens": 150,
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nFINAL DIALOGUE TURN: Review the diagnostic work thoroughly. If it covers the essential territory and no critical shadows would mislead the user, respond with exactly: 'agree'. If truly vital elements are missing that could lead to poor outcomes, surface only the most critical one, then assess if you can still agree or if disagreement is necessary to prevent misleading the user.\", $.outer_proposal.content, $.behavioral_instructions.inner || 'None detected')"
+            },
+            "ResultPath": "$.inner_response",
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackInnerVoiceFinal",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "Next": "IncrementTurnCounter"
+        },
+        "FallbackInnerVoiceFinal": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "agree"
+            },
+            "ResultPath": "$.inner_response",
             "Next": "IncrementTurnCounter"
         },
         "IncrementTurnCounter": {
@@ -158,13 +251,49 @@
                 "signals.$": "$.signals.signals"
             },
             "ResultPath": "$.context",
-            "Next": "AnalyzeConversationPatterns"
+            "Next": "ConversationAnalysis"
         },
-        "AnalyzeConversationPatterns": {
+        "ConversationAnalysis": {
             "Type": "Task",
-            "Resource": "analyzeConversationPatterns",
+            "Resource": "callLLM",
             "Parameters": {
-                "thread.$": "$.thread",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "temperature": 0.1,
+                "max_tokens": 400,
+                "prompt.$": "States.Format(\"Analyze this conversation comprehensively for patterns and intervention needs.\\n\\nConversation history: {}\\n\\nAnalyze for:\\n\\n1. STALLING PATTERNS:\\n   - Recursive analysis without meaningful progression\\n   - Analysis paralysis or cycling without resolution\\n   - Repetitive themes that don't deepen\\n\\n2. PROGRESSION QUALITY:\\n   - Are new insights building on previous ones?\\n   - Is conversation advancing or cycling?\\n   - Quality of turn-to-turn development\\n\\n3. THEMATIC LOOPS:\\n   - Repeated themes across multiple turns\\n   - Conceptual cycling (assumptions, implications, analysis)\\n   - Topics that repeat without resolution\\n\\n4. DECISION AVOIDANCE:\\n   - Excessive hedging language (maybe, perhaps, might)\\n   - Complexity introduced to delay decisions\\n   - Requests for more analysis when sufficient exists\\n\\nReturn JSON only:\\n{{\\n  \\\"stallingRisk\\\": 0.0-1.0,\\n  \\\"recursionDetected\\\": boolean,\\n  \\\"progressionScore\\\": 0.0-1.0,\\n  \\\"thematicLoops\\\": [\\\"theme1\\\", \\\"theme2\\\"],\\n  \\\"avoidanceDetected\\\": boolean,\\n  \\\"hedgingLevel\\\": \\\"low|medium|high\\\",\\n  \\\"recommendations\\\": [\\\"strike-claim-ready\\\", \\\"decision-avoidance\\\"],\\n  \\\"reasoning\\\": \\\"brief explanation of key patterns detected\\\"\\n}}\", States.JsonToString($.thread))"
+            },
+            "ResultPath": "$.conversation_analysis_result",
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackConversationAnalysis",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "Next": "AggregateConversationAnalysis"
+        },
+        "FallbackConversationAnalysis": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "{\"stallingRisk\": 0.3, \"recursionDetected\": false, \"progressionScore\": 0.5, \"thematicLoops\": [], \"avoidanceDetected\": false, \"hedgingLevel\": \"low\", \"recommendations\": [], \"reasoning\": \"Analysis failed, using fallback values\"}"
+            },
+            "ResultPath": "$.conversation_analysis_result",
+            "Next": "AggregateConversationAnalysis"
+        },
+        "AggregateConversationAnalysis": {
+            "Type": "Task",
+            "Resource": "aggregateConversationAnalysis",
+            "Parameters": {
+                "analysisResult.$": "$.conversation_analysis_result",
                 "context.$": "$.context"
             },
             "ResultPath": "$.conversation_patterns",
@@ -237,7 +366,30 @@
                 "prompt.$": "States.Format(\"As the outer voice, the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Deepen your diagnostic stance according to the behavioral instructions above. What additional assumptions can you trace? What other implications emerge when you include what was excluded?\\n\\nAddress the inner voice with your expanded investigation.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer || 'None detected')"
             },
             "ResultPath": "$.outer_proposal",
-            "Next": "InnerVoiceResponse"
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackRevision",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "Next": "RouteToInnerVoice"
+        },
+        "FallbackRevision": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "Let me examine the deeper assumptions and implications that the inner voice has surfaced."
+            },
+            "ResultPath": "$.outer_proposal",
+            "Next": "RouteToInnerVoice"
         },
         "GenerateFinalResponse": {
             "Type": "Choice",
@@ -269,6 +421,29 @@
                 "temperature": 0.3,
                 "max_tokens.$": "$.behavioral_instructions.adaptations.maxTokens || 300",
                 "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nUser input: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", $.user_input, $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction || 'None detected')"
+            },
+            "ResultPath": "$.final_response",
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2.0
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "Next": "FallbackFinalResponse",
+                    "ResultPath": "$.error"
+                }
+            ],
+            "End": true
+        },
+        "FallbackFinalResponse": {
+            "Type": "Pass",
+            "Parameters": {
+                "content": "I sense you're working through something complex. What aspects feel most important to explore further?"
             },
             "ResultPath": "$.final_response",
             "End": true

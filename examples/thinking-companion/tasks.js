@@ -76,7 +76,7 @@ export function incrementTurns({ context = {}, signals = {} }) {
         ...context,
         turn_count: newCount,
         max_turns: maxTurns,
-        base_max_turns: context.base_max_turns || 3
+        base_max_turns: context.base_max_turns || 5
     };
 }
 
@@ -113,25 +113,25 @@ export function generateBehavioralInstructions({ signals, prompts }) {
     if (!signals || typeof signals !== 'object' || !prompts) {
         return {
             outer: 'None detected',
-            inner: 'None detected', 
-            adaptations: { maxTokens: null, instruction: 'None detected' }
+            inner: 'None detected',
+            adaptations: { maxTokens: 400, instruction: 'None detected' }
         };
     }
 
     const outerInstructions = [];
     const innerInstructions = [];
     const adaptationInstructions = [];
-    
+
     // Process each signal class and detected signals
     for (const [className, detectedSignals] of Object.entries(signals)) {
         if (!Array.isArray(detectedSignals) || detectedSignals.length === 0) continue;
-        
+
         for (const signal of detectedSignals) {
             // Build keys for prompt dictionary lookup
             const outerKey = `outer.${className}.${signal}`;
             const innerKey = `inner.${className}.${signal}`;
             const adaptationKey = `adaptation.${signal}`;
-            
+
             // Collect instructions from prompt dictionary
             if (prompts[outerKey]) {
                 outerInstructions.push(`${className}.${signal}: ${prompts[outerKey]}`);
@@ -144,20 +144,23 @@ export function generateBehavioralInstructions({ signals, prompts }) {
             }
         }
     }
-    
+
     // Determine max tokens based on rhythm signals (preserve existing logic)
-    let maxTokens = null;
+    let maxTokens = 400;
     if (signals.rhythm && Array.isArray(signals.rhythm)) {
         for (const signal of signals.rhythm) {
             switch (signal) {
                 case 'cognitive-load':
-                    maxTokens = maxTokens === null ? 150 : Math.min(maxTokens, 150);
+                    maxTokens = 150;
                     break;
                 case 'stalling':
-                    maxTokens = maxTokens === null ? 100 : Math.min(maxTokens, 100);
+                    maxTokens = 100;
                     break;
                 case 'witness-call':
-                    maxTokens = maxTokens === null ? 200 : Math.min(maxTokens, 200);
+                    maxTokens = 300;
+                    break;
+                default:
+                    maxTokens = 400;
                     break;
             }
         }
@@ -166,8 +169,8 @@ export function generateBehavioralInstructions({ signals, prompts }) {
     return {
         outer: outerInstructions.length > 0 ? outerInstructions.join('\n\n') : 'None detected',
         inner: innerInstructions.length > 0 ? innerInstructions.join('\n\n') : 'None detected',
-        adaptations: { 
-            maxTokens: maxTokens, 
+        adaptations: {
+            maxTokens,
             instruction: adaptationInstructions.length > 0 ? adaptationInstructions.join(' ') : 'None detected'
         }
     };

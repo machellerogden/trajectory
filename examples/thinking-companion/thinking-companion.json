@@ -399,8 +399,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.4,
-                "max_tokens": 200,
-                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims.\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions.\", $.behavioral_instructions.outer)"
+                "max_tokens": 400,
+                "prompt.$": "States.Format(\"You are the outer voice - a diagnostic companion who exposes assumptions and tests claims.\\n\\nUser Input: {}\\n\\nBehavioral instructions: {}\\n\\nYour stance: Expose what's presumed but unexamined. Trace implications. Surface exclusions.\", $.user_input, $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -450,8 +450,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.5,
-                "max_tokens": 150,
-                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: What's excluded from this frame? What actors, values, risks, or perspectives are absent? What's the unspoken assumption holding this together?\\n\\nFocus your shadow detection according to the signal-specific instructions above. If you detect significant absences or exclusions, surface them. If the diagnostic work feels complete and no major shadows remain, respond with exactly: 'agree'. Otherwise, name what's missing.\", $.outer_proposal.content, $.behavioral_instructions.inner || 'None detected')"
+                "max_tokens": 400,
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nYour task: What's excluded from this frame? What actors, values, risks, or perspectives are absent? What's the unspoken assumption holding this together?\\n\\nFocus your shadow detection according to the signal-specific instructions above. If you detect significant absences or exclusions, surface them. If the diagnostic work feels complete and no major shadows remain, respond with exactly: 'agree'. Otherwise, name what's missing.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
             },
             "ResultPath": "$.inner_response",
             "Retry": [
@@ -490,8 +490,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.5,
-                "max_tokens": 150,
-                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nFINAL DIALOGUE TURN: Review the diagnostic work thoroughly. If it covers the essential territory and no critical shadows would mislead the user, respond with exactly: 'agree'. If truly vital elements are missing that could lead to poor outcomes, surface only the most critical one, then assess if you can still agree or if disagreement is necessary to prevent misleading the user.\", $.outer_proposal.content, $.behavioral_instructions.inner || 'None detected')"
+                "max_tokens": 400,
+                "prompt.$": "States.Format(\"You are the inner voice - a shadow detector who surfaces what's missing. The outer voice offered:\\n\\n{}\\n\\nSignal-specific shadow detection instructions: {}\\n\\nFINAL DIALOGUE TURN: Review the diagnostic work thoroughly. If it covers the essential territory and no critical shadows would mislead the user, respond with exactly: 'agree'. If truly vital elements are missing that could lead to poor outcomes, surface only the most critical one, then assess if you can still agree or if disagreement is necessary to prevent misleading the user.\", $.outer_proposal.content, $.behavioral_instructions.inner)"
             },
             "ResultPath": "$.inner_response",
             "Retry": [
@@ -637,7 +637,7 @@
                 },
                 {
                     "Variable": "$.conversation_patterns.recommendations[0]",
-                    "StringEquals": "low-progression", 
+                    "StringEquals": "low-progression",
                     "Next": "StrikeClaimLowProgression"
                 },
                 {
@@ -745,8 +745,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.4,
-                "max_tokens": 200,
-                "prompt.$": "States.Format(\"As the outer voice, the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Deepen your diagnostic stance according to the behavioral instructions above. What additional assumptions can you trace? What other implications emerge when you include what was excluded?\\n\\nAddress the inner voice with your expanded investigation.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer || 'None detected')"
+                "max_tokens": 400,
+                "prompt.$": "States.Format(\"As the outer voice, note that the inner voice surfaced: {}\\n\\nYour previous diagnostic work: {}\\n\\nBehavioral instructions: {}\\n\\nThe shadow detector has identified exclusions or missing elements. Deepen your diagnostic stance according to the behavioral instructions above. What additional assumptions can you trace? What other implications emerge when you include what was excluded?\\n\\nAddress the inner voice with your expanded investigation.\", $.inner_response.content, $.outer_proposal.content, $.behavioral_instructions.outer)"
             },
             "ResultPath": "$.outer_proposal",
             "Retry": [
@@ -806,8 +806,8 @@
                 "provider": "openai",
                 "model": "gpt-4o",
                 "temperature": 0.3,
-                "max_tokens.$": "$.behavioral_instructions.adaptations.maxTokens || 300",
-                "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nUser input: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", $.user_input, $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction || 'None detected')"
+                "max_tokens.$": "$.behavioral_instructions.adaptations.maxTokens",
+                "prompt.$": "States.Format(\"Create space for the user's deeper thinking to unfold.\\n\\nUser input: {}\\nDiagnostic observations: {}\\nShadow detection: {}\\nResponse adaptation guidance: {}\\n\\nYour response should: Acknowledge uncertainty where it exists. Distinguish what's known from what's inferred. Leave room for the user's response. Default to brevity that invites further inquiry.\\n\\nFollow the response adaptation guidance above. Respond to the user with measured tone that creates conditions for meaning to emerge rather than imposing it.\", $.user_input, $.outer_proposal.content, $.inner_response.content, $.behavioral_instructions.adaptations.instruction)"
             },
             "ResultPath": "$.final_response",
             "Retry": [

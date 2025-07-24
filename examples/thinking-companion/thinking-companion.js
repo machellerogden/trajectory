@@ -48,14 +48,14 @@ export async function runThinkingCompanion(userInput, options = {}) {
         thread: [], // Start with empty conversation thread
         context: {
             turn_count: 0,
-            max_turns: 3,
+            max_turns: 5,
             ...options.initialContext
         }
     };
 
     try {
         const [status, output] = await executeMachine(machine, context, input);
-        console.log('Output:', output);
+        if (options.debug) console.log('OUTPUT', output);
         return [status, output];
     } catch (error) {
         console.error('Thinking companion execution failed:', error.message);
@@ -73,7 +73,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     try {
         const [status, output] = await runThinkingCompanion(userInput, {
-            quiet: false
+            quiet: false,
+            debug: true
         });
 
         // Display final response

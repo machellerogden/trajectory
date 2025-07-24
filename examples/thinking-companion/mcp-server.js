@@ -1,72 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { analyzeConversationForMCP } from './tasks.js';
+import { runThinkingCompanion } from './thinking-companion.js';
 
 const server = new McpServer({
     name: 'ThinkingCompanion',
     version: '1.0.0'
 });
-
-// Helper function to format conversation analysis for Claude Code
-function formatAnalysisOutput(analysis) {
-    const lines = [];
-    
-    // Add primary recommendation with high confidence
-    const primary = analysis.recommendations[0];
-    if (primary) {
-        if (primary.type === 'strike_claim') {
-            lines.push('⚡ **Strike-Claim Intervention:**');
-            lines.push(`"${primary.intervention}"`);
-            lines.push(`*Triggered by: ${primary.triggered_by?.join(', ')} | Confidence: ${(primary.confidence * 100).toFixed(0)}%*`);
-        } else if (primary.type === 'validation_support') {
-            lines.push('🤝 **Validation Support Needed:**');
-            lines.push(primary.intervention);
-            lines.push(`*Reason: ${primary.reasoning} | Confidence: ${(primary.confidence * 100).toFixed(0)}%*`);
-        } else if (primary.type === 'ease_pressure') {
-            lines.push('🛑 **Ease Analytical Pressure:**');
-            lines.push(primary.intervention);
-            lines.push(`*${primary.reasoning} | Confidence: ${(primary.confidence * 100).toFixed(0)}%*`);
-        } else {
-            lines.push(`💡 **Recommended Approach (${primary.type}):**`);
-            lines.push(primary.intervention);
-            lines.push(`*${primary.reasoning} | Confidence: ${(primary.confidence * 100).toFixed(0)}%*`);
-        }
-        lines.push('');
-    }
-    
-    // Add conversation health metrics
-    const health = analysis.diagnostic_insights.conversation_health;
-    lines.push('📊 **Conversation Analysis:**');
-    lines.push(`• **Stalling Risk**: ${(health.stalling_risk * 100).toFixed(0)}% ${health.stalling_risk > 0.6 ? '⚠️' : ''}`);
-    lines.push(`• **Progression Score**: ${(health.progression_score * 100).toFixed(0)}%`);
-    if (analysis.analysis.conversation_patterns.thematicLoops.length > 0) {
-        lines.push(`• **Thematic Loops**: ${analysis.analysis.conversation_patterns.thematicLoops.join(', ')}`);
-    }
-    lines.push('');
-    
-    // Add cognitive patterns if any
-    if (analysis.diagnostic_insights.cognitive_patterns.length > 0) {
-        lines.push('🧠 **Cognitive Patterns:**');
-        analysis.diagnostic_insights.cognitive_patterns.forEach(pattern => {
-            lines.push(`• ${pattern}`);
-        });
-        lines.push('');
-    }
-    
-    // Add secondary recommendations
-    if (analysis.recommendations.length > 1) {
-        lines.push('🔄 **Additional Approaches:**');
-        analysis.recommendations.slice(1, 3).forEach((rec, i) => {
-            lines.push(`${i + 2}. **${rec.type}**: ${rec.intervention}`);
-        });
-        lines.push('');
-    }
-    
-    lines.push(`*Analysis confidence: ${(analysis.meta.analysis_confidence * 100).toFixed(0)}% | Conversation length: ${analysis.meta.conversation_length} turns*`);
-    
-    return lines.join('\\n');
-}
 
 server.tool(
     'contemplate',
@@ -84,41 +24,47 @@ server.tool(
     },
     async ({ message, options = {} }) => {
         try {
-            // Extract conversation history from options or default to empty array
             const conversationHistory = options.conversationHistory || [];
-            
-            // Add the current message to the conversation history for analysis
-            const fullHistory = [
-                ...conversationHistory,
-                { role: 'user', content: message }
-            ];
-
-            // Perform the conversation analysis using our intelligent tool
-            const analysis = await analyzeConversationForMCP({
-                conversationHistory: fullHistory,
-                currentQuery: message
+            const quiet = options.quiet || false;
+            const [status, output] = await runThinkingCompanion(message, {
+                quiet,
+                initialContext: { max_turns: 5 },
+                context: {
+                    thread: conversationHistory ?? [] // full conversation thread
+                }
             });
-            
-            // Format the response for Claude Code
-            const formattedResponse = formatAnalysisOutput(analysis);
-            
+
+            const finalResponse = formatFinalResponse(output, quiet);
+
             return {
-                content: [{
-                    type: "text",
-                    text: formattedResponse
-                }]
+                content: [{ type: "text", text: finalResponse }]
             };
-            
+
         } catch (error) {
             return {
                 content: [{
-                    type: "text", 
+                    type: "text",
                     text: `❌ **Error during contemplation**: ${error.message}`
                 }]
             };
         }
     }
 );
+
+function formatFinalResponse(output, quiet) {
+    let finalResponse = output.final_response?.content || '(no final response)';
+    if (quiet) return finalResponse;
+    let dialog = output.thread.reduce((dialogText, turn) => {
+        let rolePrefix = turn.role === 'user' ? 'User: ' : 'Assistant: ';
+        let content = turn.content || '(no content)';
+        return dialogText + `${rolePrefix}${content}\n`;
+    }, '');
+    let turnCount = output.context?.turn_count || 0;
+    let maxTurns = output.context?.max_turns || 5;
+    let summary = `\n\n---\n\n**Conversation Summary**:\nTotal Turns: ${turnCount}/${maxTurns}\n\n${dialog}`;
+
+    return `${finalResponse}${summary}`;
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

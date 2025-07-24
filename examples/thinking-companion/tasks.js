@@ -8,7 +8,7 @@ export function appendUserMessage({ thread = [], message }) {
     if (!message || !message.content) {
         throw new Error('Message with content is required');
     }
-    
+
     return [...thread, message];
 }
 
@@ -17,11 +17,11 @@ export function appendUserMessage({ thread = [], message }) {
  */
 export async function callLLM(params) {
     const { provider, model, temperature, max_tokens, prompt } = params;
-    
+
     if (!provider) {
         throw new Error('Provider is required');
     }
-    
+
     if (!prompt) {
         throw new Error('Prompt is required');
     }
@@ -34,7 +34,7 @@ export async function callLLM(params) {
             max_tokens,
             prompt
         });
-        
+
         return result;
     } catch (error) {
         console.error('LLM call failed:', error.message);
@@ -48,10 +48,10 @@ export async function callLLM(params) {
 export function incrementTurns({ context = {}, signals = {} }) {
     const currentCount = context.turn_count || 0;
     const newCount = currentCount + 1;
-    
+
     // Calculate dynamic max turns based on rhythm signals
     let maxTurns = context.base_max_turns || 3; // Default base
-    
+
     if (signals && signals.rhythm && Array.isArray(signals.rhythm)) {
         for (const rhythmSignal of signals.rhythm) {
             switch (rhythmSignal) {
@@ -70,7 +70,7 @@ export function incrementTurns({ context = {}, signals = {} }) {
             }
         }
     }
-    
+
     return {
         ...context,
         turn_count: newCount,
@@ -86,7 +86,7 @@ export function appendMessageToThread({ thread = [], message }) {
     if (!message) {
         throw new Error('Message is required');
     }
-    
+
     return [...thread, message];
 }
 
@@ -99,7 +99,7 @@ export function extractFinalOuterMessage({ thread = [] }) {
     if (outerMessages.length === 0) {
         throw new Error('No outer voice messages found in thread');
     }
-    
+
     return outerMessages[outerMessages.length - 1];
 }
 
@@ -113,10 +113,10 @@ export async function distillSignals({ signalClass, userInput }) {
 
     try {
         const prompt = createDistillerPrompt(signalClass, userInput);
-        
+
         const result = await providerCallLLM({
             provider: 'openai',
-            model: 'gpt-4o',
+            model: '4o-mini',
             temperature: 0,
             max_tokens: 50, // Allow more tokens for JSON arrays
             prompt
@@ -126,14 +126,14 @@ export async function distillSignals({ signalClass, userInput }) {
         let detectedSignals;
         try {
             let content = result.content.trim();
-            
+
             // Remove code block markers if present
             if (content.startsWith('```json')) {
                 content = content.replace(/```json\s*/, '').replace(/\s*```$/, '');
             } else if (content.startsWith('```')) {
                 content = content.replace(/```\s*/, '').replace(/\s*```$/, '');
             }
-            
+
             detectedSignals = JSON.parse(content);
         } catch (parseError) {
             console.warn(`Failed to parse signals for ${signalClass}: ${result.content}`);
@@ -181,7 +181,7 @@ export function aggregateSignals({ distillerResults }) {
         }
 
         const { signalClass, signals: detectedSignals, error } = result;
-        
+
         if (error) {
             errors.push(`${signalClass}: ${error}`);
             continue;
@@ -263,13 +263,13 @@ export function aggregateConversationAnalysis({ analysisResult, context = {} }) 
             patterns.recommendations.push('strike-claim-ready');
         }
     }
-    
+
     if (analysis.avoidanceDetected || analysis.hedgingLevel === 'high') {
         if (!patterns.recommendations.includes('decision-avoidance')) {
             patterns.recommendations.push('decision-avoidance');
         }
     }
-    
+
     if (patterns.progressionScore < 0.3) {
         if (!patterns.recommendations.includes('low-progression')) {
             patterns.recommendations.push('low-progression');
@@ -287,16 +287,16 @@ function parseLLMResult(llmResult, fallback) {
         if (!llmResult || !llmResult.content) {
             return fallback;
         }
-        
+
         let content = llmResult.content.trim();
-        
+
         // Remove code block markers if present
         if (content.startsWith('```json')) {
             content = content.replace(/```json\s*/, '').replace(/\s*```$/, '');
         } else if (content.startsWith('```')) {
             content = content.replace(/```\s*/, '').replace(/\s*```$/, '');
         }
-        
+
         const parsed = JSON.parse(content);
         return { ...fallback, ...parsed };
     } catch (error) {
@@ -308,7 +308,7 @@ function parseLLMResult(llmResult, fallback) {
 /**
  * Analyze conversation patterns for stalling, repetition, and progression
  * DEPRECATED: Replaced by parallel LLM-powered analysis
- * 
+ *
  * This function is kept for backward compatibility with the MCP tool.
  * The state machine now uses aggregateConversationAnalysis with LLM-powered analysis.
  */
@@ -331,7 +331,7 @@ export function analyzeConversationPatterns({ thread = [], context = {} }) {
     if (userMessages.length >= 2) {
         const lastTwoMessages = userMessages.slice(-2);
         const repeatedWords = findCommonWords(lastTwoMessages);
-        
+
         if (repeatedWords.length > 2) {
             patterns.stallingRisk = 0.7;
             patterns.recursionDetected = true;
@@ -348,10 +348,10 @@ export function analyzeConversationPatterns({ thread = [], context = {} }) {
  */
 function findCommonWords(messages) {
     if (messages.length < 2) return [];
-    
+
     const words1 = new Set(messages[0].content.toLowerCase().split(/\s+/).filter(w => w.length > 4));
     const words2 = new Set(messages[1].content.toLowerCase().split(/\s+/).filter(w => w.length > 4));
-    
+
     return [...words1].filter(word => words2.has(word));
 }
 
@@ -362,7 +362,7 @@ export function generateStrikeClaim({ userInput, conversationPatterns, context }
     const strikeClaims = {
         'assumption-overanalysis': [
             "You're dissecting assumptions that are already clear. Move forward.",
-            "This assumption analysis is stalling. What's the real question?", 
+            "This assumption analysis is stalling. What's the real question?",
             "You already know what you're assuming. What are you avoiding?"
         ],
         'low-progression': [
@@ -389,7 +389,7 @@ export function generateStrikeClaim({ userInput, conversationPatterns, context }
 
     // Determine which type of strike claim to use based on patterns
     let selectedClaims = strikeClaims['general-stalling']; // Default
-    
+
     if (conversationPatterns.recommendations) {
         for (const recommendation of conversationPatterns.recommendations) {
             if (strikeClaims[recommendation]) {
@@ -423,7 +423,7 @@ export function checkConvergence({ innerResponse, context }) {
     // Check if we've reached max turns
     const turnCount = context.turn_count || 0;
     const maxTurns = context.max_turns || 3;
-    
+
     if (turnCount >= maxTurns) {
         return { action: 'final_response', reason: 'max_turns_reached', turn_count: turnCount, max_turns: maxTurns };
     }
@@ -433,65 +433,20 @@ export function checkConvergence({ innerResponse, context }) {
 }
 
 /**
- * Intelligent conversation analysis for MCP tool integration
- * Analyzes conversation history and provides automatic diagnostic insights and intervention recommendations
- */
-export async function analyzeConversationForMCP({ conversationHistory, currentQuery }) {
-    if (!conversationHistory || !Array.isArray(conversationHistory)) {
-        throw new Error('conversationHistory must be an array of conversation messages');
-    }
-    
-    if (!currentQuery || typeof currentQuery !== 'string') {
-        throw new Error('currentQuery must be a string');
-    }
-
-    // Step 1: Detect signals in the current query
-    const signals = await detectSignalsInInput(currentQuery);
-    
-    // Step 2: Analyze conversation patterns across history
-    const patterns = analyzeConversationPatterns({ 
-        thread: conversationHistory, 
-        context: { turn_count: conversationHistory.length }
-    });
-    
-    // Step 3: Generate intelligent recommendations
-    const recommendations = determineRecommendations(signals, patterns, currentQuery);
-    
-    // Step 4: Create diagnostic insights
-    const diagnosticInsights = generateDiagnosticInsights(signals, patterns, conversationHistory);
-    
-    return {
-        analysis: {
-            detected_signals: signals,
-            conversation_patterns: patterns,
-            stalling_risk: patterns.stallingRisk,
-            progression_score: patterns.progressionScore
-        },
-        recommendations: recommendations,
-        diagnostic_insights: diagnosticInsights,
-        meta: {
-            conversation_length: conversationHistory.length,
-            analysis_confidence: calculateConfidence(signals, patterns),
-            timestamp: new Date().toISOString()
-        }
-    };
-}
-
-/**
  * Detect signals in a single input (simplified version of our parallel detection)
  */
 async function detectSignalsInInput(input) {
     const allSignals = createEmptySignals();
-    
+
     // Simulate our parallel signal detection in a simplified synchronous way
     const signalClasses = getSignalClassNames();
-    
+
     for (const className of signalClasses) {
         // For now, use simple keyword detection instead of LLM calls for speed
         const detectedSignals = detectSignalsSync(className, input);
         allSignals[className] = detectedSignals;
     }
-    
+
     return allSignals;
 }
 
@@ -501,7 +456,7 @@ async function detectSignalsInInput(input) {
 function detectSignalsSync(className, input) {
     const inputLower = input.toLowerCase();
     const detected = [];
-    
+
     switch (className) {
         case 'logic':
             if (inputLower.includes('assume') || inputLower.includes('presume') || inputLower.includes('given that')) {
@@ -514,7 +469,7 @@ function detectSignalsSync(className, input) {
                 detected.push('missing-data');
             }
             break;
-            
+
         case 'stance':
             if (inputLower.includes('definitely') || inputLower.includes('obviously') || inputLower.includes('certainly')) {
                 detected.push('overreach');
@@ -526,7 +481,7 @@ function detectSignalsSync(className, input) {
                 detected.push('speculation');
             }
             break;
-            
+
         case 'rhythm':
             if (inputLower.includes('keep thinking') || inputLower.includes('still analyzing') || inputLower.includes('going in circles')) {
                 detected.push('stalling');
@@ -535,13 +490,13 @@ function detectSignalsSync(className, input) {
                 detected.push('cognitive-load');
             }
             break;
-            
+
         case 'affect':
             if (inputLower.includes('feel') || inputLower.includes('struggling') || inputLower.includes('worried')) {
                 detected.push('witness-call');
             }
             break;
-            
+
         case 'framing':
             if (inputLower.includes('tension') || inputLower.includes('conflict') || inputLower.includes('competing')) {
                 detected.push('tension');
@@ -550,14 +505,14 @@ function detectSignalsSync(className, input) {
                 detected.push('frame');
             }
             break;
-            
+
         case 'meta':
             if (inputLower.includes('process') || inputLower.includes('approach') || inputLower.includes('methodology')) {
                 detected.push('alignment-gap');
             }
             break;
     }
-    
+
     return detected;
 }
 
@@ -566,15 +521,15 @@ function detectSignalsSync(className, input) {
  */
 function determineRecommendations(signals, patterns, currentQuery) {
     const recommendations = [];
-    
+
     // Priority 1: Strike-claim for high stalling risk
     if (patterns.stallingRisk > 0.6 && patterns.recursionDetected) {
-        const strikeClaim = generateStrikeClaim({ 
+        const strikeClaim = generateStrikeClaim({
             conversationPatterns: patterns,
             userInput: currentQuery,
             context: { turn_count: patterns.stallingRisk } // Use stallingRisk as proxy
         });
-        
+
         recommendations.push({
             type: 'strike_claim',
             priority: 'high',
@@ -585,19 +540,19 @@ function determineRecommendations(signals, patterns, currentQuery) {
             triggered_by: strikeClaim.triggered_by
         });
     }
-    
+
     // Priority 2: Validation for witness calls
     if (signals.affect && signals.affect.includes('witness-call')) {
         recommendations.push({
             type: 'validation_support',
-            priority: 'high', 
+            priority: 'high',
             intervention: 'Acknowledge the emotional reality before proceeding with analysis',
             reasoning: 'User expressing emotional need that requires acknowledgment',
             confidence: 0.9,
             suggested_delivery: 'supportive'
         });
     }
-    
+
     // Priority 3: Assumption tracing for good progression
     if (signals.logic && signals.logic.includes('assumption') && patterns.progressionScore > 0.5) {
         recommendations.push({
@@ -609,7 +564,7 @@ function determineRecommendations(signals, patterns, currentQuery) {
             suggested_delivery: 'diagnostic'
         });
     }
-    
+
     // Priority 4: Shadow detection for high exclusion risk
     if (patterns.thematicLoops && patterns.thematicLoops.length > 0) {
         recommendations.push({
@@ -621,7 +576,7 @@ function determineRecommendations(signals, patterns, currentQuery) {
             suggested_delivery: 'exploratory'
         });
     }
-    
+
     // Priority 5: Cognitive load management
     if (signals.rhythm && signals.rhythm.includes('cognitive-load')) {
         recommendations.push({
@@ -633,7 +588,7 @@ function determineRecommendations(signals, patterns, currentQuery) {
             suggested_delivery: 'structured'
         });
     }
-    
+
     // Failsafe: Check for over-analysis and recommend backing off
     if (patterns.stallingRisk > 0.8 && signals.rhythm && signals.rhythm.includes('cognitive-load')) {
         recommendations.unshift({
@@ -645,7 +600,7 @@ function determineRecommendations(signals, patterns, currentQuery) {
             suggested_delivery: 'gentle'
         });
     }
-    
+
     // Default: Exploratory engagement if no strong patterns
     if (recommendations.length === 0) {
         recommendations.push({
@@ -657,7 +612,7 @@ function determineRecommendations(signals, patterns, currentQuery) {
             suggested_delivery: 'curious'
         });
     }
-    
+
     // Sort by priority and confidence
     return recommendations.sort((a, b) => {
         const priorityOrder = { high: 3, medium: 2, low: 1 };
@@ -676,20 +631,20 @@ function generateDiagnosticInsights(signals, patterns, conversationHistory) {
         intervention_readiness: {},
         conversation_health: {}
     };
-    
+
     // Extract key assumptions from conversation
     if (signals.logic && signals.logic.includes('assumption')) {
         insights.key_assumptions = extractAssumptions(conversationHistory);
     }
-    
+
     // Identify excluded perspectives
     if (patterns.thematicLoops) {
         insights.excluded_perspectives = identifyExclusions(conversationHistory, patterns.thematicLoops);
     }
-    
+
     // Describe cognitive patterns
     insights.cognitive_patterns = describeCognitivePatterns(patterns);
-    
+
     // Assess intervention readiness
     insights.intervention_readiness = {
         strike_claim_ready: patterns.stallingRisk > 0.6,
@@ -697,7 +652,7 @@ function generateDiagnosticInsights(signals, patterns, conversationHistory) {
         assumption_work_ready: signals.logic && signals.logic.includes('assumption'),
         validation_needed: signals.affect && signals.affect.includes('witness-call')
     };
-    
+
     // Conversation health metrics
     insights.conversation_health = {
         progression_score: patterns.progressionScore,
@@ -705,7 +660,7 @@ function generateDiagnosticInsights(signals, patterns, conversationHistory) {
         thematic_diversity: patterns.thematicLoops.length,
         turn_efficiency: conversationHistory.length > 0 ? patterns.progressionScore / conversationHistory.length : 0
     };
-    
+
     return insights;
 }
 
@@ -714,16 +669,16 @@ function generateDiagnosticInsights(signals, patterns, conversationHistory) {
  */
 function calculateConfidence(signals, patterns) {
     let confidence = 0.5; // Base confidence
-    
+
     // Increase confidence with more detected signals
     const totalSignals = Object.values(signals).flat().length;
     confidence += Math.min(0.3, totalSignals * 0.05);
-    
+
     // Increase confidence with clear patterns
     if (patterns.recursionDetected) confidence += 0.2;
     if (patterns.stallingRisk > 0.7) confidence += 0.2;
     if (patterns.progressionScore < 0.3 || patterns.progressionScore > 0.7) confidence += 0.1;
-    
+
     return Math.min(1.0, confidence);
 }
 
@@ -738,8 +693,8 @@ function extractAssumptions(conversationHistory) {
             const content = message.content.toLowerCase();
             if (content.includes('assume') || content.includes('presume') || content.includes('given that')) {
                 // Extract the assumption context
-                const sentences = message.content.split('.').filter(s => 
-                    s.toLowerCase().includes('assume') || 
+                const sentences = message.content.split('.').filter(s =>
+                    s.toLowerCase().includes('assume') ||
                     s.toLowerCase().includes('presume') ||
                     s.toLowerCase().includes('given that')
                 );
@@ -758,37 +713,37 @@ function identifyExclusions(conversationHistory, thematicLoops) {
         'stakeholders': ['affected parties', 'decision makers', 'implementation teams'],
         'exclusions': ['alternative approaches', 'constraint factors', 'success metrics']
     };
-    
+
     const exclusions = [];
     for (const theme of thematicLoops) {
         if (commonExclusions[theme]) {
             exclusions.push(...commonExclusions[theme]);
         }
     }
-    
+
     return [...new Set(exclusions)].slice(0, 4); // Unique, limit to 4
 }
 
 function describeCognitivePatterns(patterns) {
     const descriptions = [];
-    
+
     if (patterns.stallingRisk > 0.6) {
         descriptions.push('High stalling risk - conversation may be cycling without progression');
     }
-    
+
     if (patterns.recursionDetected) {
         descriptions.push('Recursive patterns detected - similar themes repeating across turns');
     }
-    
+
     if (patterns.progressionScore < 0.3) {
         descriptions.push('Low progression - conversation not building on previous insights');
     } else if (patterns.progressionScore > 0.7) {
         descriptions.push('Strong progression - conversation building meaningfully on previous turns');
     }
-    
+
     if (patterns.thematicLoops.length > 2) {
         descriptions.push(`Multiple thematic loops detected: ${patterns.thematicLoops.join(', ')}`);
     }
-    
+
     return descriptions;
 }

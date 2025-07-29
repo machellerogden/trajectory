@@ -1,0 +1,46 @@
+{
+    "Comment": "Example workflow demonstrating AbortController support",
+    "StartAt": "ProcessData",
+    "States": {
+        "ProcessData": {
+            "Type": "Parallel",
+            "Comment": "Process data in parallel - all branches can be cancelled",
+            "Branches": [
+                {
+                    "StartAt": "AnalyzeData",
+                    "States": {
+                        "AnalyzeData": {
+                            "Type": "Task",
+                            "Resource": "analyzeData",
+                            "Comment": "Long-running analysis task",
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "TransformData",
+                    "States": {
+                        "TransformData": {
+                            "Type": "Task",
+                            "Resource": "transformData",
+                            "Comment": "Data transformation task",
+                            "End": true
+                        }
+                    }
+                },
+                {
+                    "StartAt": "ValidateData",
+                    "States": {
+                        "ValidateData": {
+                            "Type": "Task",
+                            "Resource": "validateData",
+                            "Comment": "Data validation task",
+                            "End": true
+                        }
+                    }
+                }
+            ],
+            "End": true
+        }
+    }
+}

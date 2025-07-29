@@ -9,3 +9,4 @@ import './test/errorPreservation.test.js';
 import './test/tokenizer.test.js';
 import './test/retryCatch.test.js';
 import './test/log.test.js';
+import './test/abort.test.js';

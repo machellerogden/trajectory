@@ -18,7 +18,7 @@ test('AbortController - Task State Cancellation', async (assert) => {
     let taskCompleted = false;
 
     const handlers = {
-        longRunningTask: async (input, signal) => {
+        longRunningTask: async (input, context) => {
             taskStarted = true;
             // Simulate a long-running task
             await new Promise((resolve, reject) => {
@@ -26,10 +26,9 @@ test('AbortController - Task State Cancellation', async (assert) => {
                     taskCompleted = true;
                     resolve('Success');
                 }, 1000);
-                
-                // Listen for abort signal
-                if (signal) {
-                    signal.addEventListener('abort', () => {
+
+                if (context.signal) {
+                    context.signal.addEventListener('abort', () => {
                         clearTimeout(timeout);
                         reject(new Error('Task aborted'));
                     });
@@ -44,16 +43,16 @@ test('AbortController - Task State Cancellation', async (assert) => {
     };
 
     const controller = new AbortController();
-    
+
     // Add signal to context
     context.signal = controller.signal;
-    
+
     // Start the execution
     const executionPromise = executeMachine(machine, context, {});
-    
+
     // Cancel after 100ms
     setTimeout(() => controller.abort(), 100);
-    
+
     const [status, output] = await executionPromise;
 
     assert.is(status, STATE.FAILED);
@@ -103,43 +102,43 @@ test('AbortController - Parallel State Cancellation', async (assert) => {
     let task2Completed = false;
 
     const handlers = {
-        slowTask1: async (input, signal) => {
+        slowTask1: async (input, context) => {
             task1Started = true;
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     task1Completed = true;
                     resolve('Task 1 complete');
                 }, 1000);
-                
-                if (signal) {
+
+                if (context.signal) {
                     const abortHandler = () => {
                         clearTimeout(timeout);
                         reject(new Error('Task 1 aborted'));
                     };
-                    signal.addEventListener('abort', abortHandler);
+                    context.signal.addEventListener('abort', abortHandler);
                     // Check if already aborted
-                    if (signal.aborted) {
+                    if (context.signal.aborted) {
                         abortHandler();
                     }
                 }
             });
         },
-        slowTask2: async (input, signal) => {
+        slowTask2: async (input, context) => {
             task2Started = true;
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     task2Completed = true;
                     resolve('Task 2 complete');
                 }, 1000);
-                
-                if (signal) {
+
+                if (context.signal) {
                     const abortHandler = () => {
                         clearTimeout(timeout);
                         reject(new Error('Task 2 aborted'));
                     };
-                    signal.addEventListener('abort', abortHandler);
+                    context.signal.addEventListener('abort', abortHandler);
                     // Check if already aborted
-                    if (signal.aborted) {
+                    if (context.signal.aborted) {
                         abortHandler();
                     }
                 }
@@ -155,10 +154,10 @@ test('AbortController - Parallel State Cancellation', async (assert) => {
     const controller = new AbortController();
     context.signal = controller.signal;
     const executionPromise = executeMachine(machine, context, {});
-    
+
     // Cancel after 100ms
     setTimeout(() => controller.abort(), 100);
-    
+
     const [status, output] = await executionPromise;
 
     assert.is(status, STATE.FAILED);
@@ -193,15 +192,15 @@ test('AbortController - Map State Cancellation', async (assert) => {
     const totalItems = 10;
 
     const handlers = {
-        processItem: async (input, signal) => {
+        processItem: async (input, context) => {
             await new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     processedCount++;
                     resolve(`Processed ${input}`);
                 }, 100);
-                
-                if (signal) {
-                    signal.addEventListener('abort', () => {
+
+                if (context.signal) {
+                    context.signal.addEventListener('abort', () => {
                         clearTimeout(timeout);
                         reject(new Error('Item processing aborted'));
                     });
@@ -222,10 +221,10 @@ test('AbortController - Map State Cancellation', async (assert) => {
     const controller = new AbortController();
     context.signal = controller.signal;
     const executionPromise = executeMachine(machine, context, input);
-    
+
     // Cancel after 150ms (should allow some items to process)
     setTimeout(() => controller.abort(), 150);
-    
+
     const [status, output] = await executionPromise;
 
     assert.is(status, STATE.FAILED);
@@ -262,7 +261,7 @@ test('AbortController - Already Aborted Signal', async (assert) => {
     const controller = new AbortController();
     controller.abort(); // Abort before execution
     context.signal = controller.signal;
-    
+
     const [status, output] = await executeMachine(machine, context, {});
 
     assert.is(status, STATE.FAILED);
